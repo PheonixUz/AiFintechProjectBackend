@@ -1,0 +1,17 @@
+5-muammo: Sun'iy Intellekt Asosidagi Biznes Tahlil Platformasi
+
+Muammo bayoni
+Bank boy tranzaksion ma'lumotlarga ega (MCC kategoriyalari, geolokatsiya, mijoz xatti-harakati), lekin KMB mijozlari yangi biznes imkoniyatini baholashda intuitsiyaga va tarqoq ma'lumotlarga tayanadi. Noto'g'ri lokatsiya yoki to'yingan bozorda ochilgan biznes muvaffaqiyatsizlikka uchraydi — bu mijoz uchun ham, bank uchun ham kredit riski.
+Yechim talablari
+Ishtirokchilar beshta tahliliy yo'nalish bo'yicha sun'iy intellekt modellarini yaratishlari yoki loyihalashlari kerak:
+• A bloki — Bozor Tahlili: TAM/SAM/SOM hajmini hisoblash, GAP tahlili, to'yinganlik indeksi, nisha imkoniyat skori
+• B bloki — Talab Prognozi: 12/36 oylik daromad prognozi (LSTM + Prophet), Ramazon, Navro'z va mahalliy tadbirlar uchun mavsumiylik modellari
+• C bloki — Lokatsiya Razvedkasi: 0–100 lokatsiya skori, soat/kun bo'yicha piyoda va avtomobil trafigi, izoxron talab, anchor effekt modeli
+• D bloki — Moliyaviy Hayotiylik: zararlanmaslik nuqtasi, pul oqimi simulyatsiyasi (Monte-Karlo), birlik iqtisodiyoti, ROI hisoblagich
+• E bloki — Raqobat va Xavflar: 300m/1km radiusida raqobatchilar xaritasi, biznesning yopilish ehtimolini bashorat qilish, kirib kelish to'siqlari tahlili
+Qabul qilish mezonlari
+Platforma quyidagi asosiy savolga aniq javob beradi:
+• "Men bu biznesni, bu joyda, hozir ochamanmi?" — ha/yo'q tavsiyasi va tushuntirish bilan
+• Har bir blok uchun alohida vizual dashboard
+• Bank uchun: mijoz skoringi orqali kredit qarorini qo'llab-quvvatlash
+

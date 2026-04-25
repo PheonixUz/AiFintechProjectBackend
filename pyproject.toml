@@ -1,0 +1,44 @@
+[project]
+name = "ai-fintech-platform"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "langchain",
+    "langchain-core",
+    "langchain-google-genai",
+    "langgraph",
+    "numpy",
+    "scipy",
+    "pandas",
+    "redis",
+    "httpx",
+    "alembic",
+    "greenlet",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "httpx",
+    "factory-boy",
+    "ruff>=0.15.12",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

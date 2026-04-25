@@ -1,0 +1,312 @@
+═══════════════════════════════════════════════════════════════════
+  AI FINTECH PLATFORM — MVP BACKEND STRUKTURASI
+  Bank: Коммерческий банк Узбекистана (KMB)
+  Til: Python | Paket: uv | Test: pytest | API: FastAPI
+  Arxitektura: AI Agent (Claude tool_use) + MCP Server + Algoritmlar
+═══════════════════════════════════════════════════════════════════
+
+ASOSIY G'OYA
+─────────────
+ML modellarini o'zimiz qurmayapmiz.
+Buning o'rniga:
+  1. Bank tranzaksion ma'lumotlari (PostgreSQL — MCP Server orqali)
+  2. Matematik/statistik algoritmlar (sof Python funksiyalari)
+  3. AI Agent (Claude tool_use) — qaysi modelni ishlatishni o'zi hal qiladi,
+     MCP tools orqali DB dan ma'lumot oladi, algoritmlarni chaqiradi,
+     yakuniy Ha/Yo'q qarorini beradi
+
+MVP UCHUN 5 TA MODEL
+─────────────────────
+  M-A3  Saturation Index      — nisha qanchalik to'yingan? (0–100)
+  M-C1  Location Score        — lokatsiya qanchalik jozibali? (0–100)
+  M-D1  Viability Check       — biznes omon qolishiga ehtimol (Monte Carlo)
+  M-D3  ROI Estimator         — NPV, ROI, qaytish muddati (DCF)
+  M-E2  Churn Prediction      — 2 yilda yopilish ehtimoli (%)
+
+═══════════════════════════════════════════════════════════════════
+MA'LUMOTLAR OQIMI (DATA FLOW)
+═══════════════════════════════════════════════════════════════════
+
+  POST /api/v1/analyze
+  { nisha, koordinata, kapital }
+           │
+           ▼
+    AnalyzeRoute (FastAPI)
+           │
+           ▼
+    AgentOrchestrator
+      Claude claude-sonnet-4-6 — tool_use rejimida ishlaydi
+           │
+     ┌─────┴──────────────────────────────────────┐
+     │  Agent o'zi hal qiladi:                    │
+     │  1. Qaysi 5 modeldan qaysilari kerak?      │
+     │  2. DB dan qanday ma'lumot kerak?          │
+     │  3. Algoritmlarni qanday tartibda chaqirish │
+     └─────┬──────────────────────────────────────┘
+           │
+     ┌─────▼──────────────────────────────────────┐
+     │  MCP Tools (DB so'rovlari)                 │
+     │  get_niche_transactions(niche, radius)      │
+     │  get_competitors(lat, lon, radius)          │
+     │  get_location_poi(lat, lon)                 │
+     │  get_sector_benchmarks(niche)               │
+     └─────┬──────────────────────────────────────┘
+           │  (tuzilgan ma'lumotlar)
+           ▼
+     ┌─────────────────────────────────────────────┐
+     │  Algorithm Tools (sof hisob-kitob)          │
+     │  run_saturation_index(data) → float         │
+     │  run_location_score(data)   → float         │
+     │  run_viability_check(data)  → ViabilityResult│
+     │  run_roi_estimator(data)    → ROIResult      │
+     │  run_churn_prediction(data) → float         │
+     └─────┬───────────────────────────────────────┘
+           │  (raqamli natijalar)
+           ▼
+    Agent yakuniy sintez qiladi:
+      → "HA / YO'Q" + sabab + raqamli asoslar (o'zbek tilida)
+           │
+           ▼
+    AnalysisResponse (JSON)
+
+═══════════════════════════════════════════════════════════════════
+PAPKA DARAXTI
+═══════════════════════════════════════════════════════════════════
+
+AiFintechProject/
+│
+├── pyproject.toml
+├── uv.lock
+├── .python-version
+├── .env.example
+├── .env
+│
+├── docs/
+│   ├── problem.txt
+│   ├── Ai_Models.md
+│   └── structura.txt
+│
+└── src/
+    └── app/
+        │
+        ├── __init__.py
+        ├── main.py                  # FastAPI ilovasi, lifespan, router
+        ├── config.py                # Pydantic Settings (env vars)
+        │
+        ├── api/                     # HTTP qatlami
+        │   ├── __init__.py
+        │   ├── deps.py              # DI: agent va db session
+        │   └── routes/
+        │       ├── __init__.py
+        │       └── analyze.py       # POST /api/v1/analyze
+        │
+        ├── schemas/                 # Pydantic kontraktlar
+        │   ├── __init__.py
+        │   ├── request.py           # AnalysisRequest (nisha, koordinata, kapital)
+        │   └── response.py          # AnalysisResponse (qaror, skor, tushuntirish)
+        │
+        ├── agent/                   # AI Agent qatlami
+        │   ├── __init__.py
+        │   ├── orchestrator.py      # Asosiy agent loop (tool_use + qaror)
+        │   ├── tool_registry.py     # MCP + algorithm toollarni ro'yxatga olish
+        │   └── prompts/
+        │       ├── __init__.py
+        │       ├── system.py        # Bank konteksti (prompt caching bilan)
+        │       └── decision.py      # Ha/Yo'q yakuniy qaror prompti
+        │
+        ├── mcp/                     # MCP Server — agent uchun DB eshigi
+        │   ├── __init__.py
+        │   ├── server.py            # MCP server (FastMCP yoki mcp lib)
+        │   └── tools/
+        │       ├── __init__.py
+        │       ├── market.py        # get_niche_transactions, get_market_size
+        │       ├── location.py      # get_location_poi, get_traffic_data
+        │       ├── financial.py     # get_sector_benchmarks, get_cost_data
+        │       └── competition.py   # get_competitors, get_closure_stats
+        │
+        ├── algorithms/              # Sof matematik funksiyalar (I/O yo'q)
+        │   ├── __init__.py
+        │   ├── saturation_index.py  # M-A3: to'yinganlik indeksi 0–100
+        │   ├── location_score.py    # M-C1: composite lokatsiya skori 0–100
+        │   ├── viability_check.py   # M-D1: break-even + Monte Carlo survival %
+        │   ├── roi_estimator.py     # M-D3: NPV, IRR, ROI, payback (DCF)
+        │   └── churn_prediction.py  # M-E2: biznes yopilish ehtimoli 0–1
+        │
+        └── db/                      # Ma'lumotlar bazasi qatlami
+            ├── __init__.py
+            ├── connection.py        # AsyncPG/SQLAlchemy async engine
+            ├── models/
+            │   ├── __init__.py
+            │   ├── transaction.py   # MCC tranzaksiyalar
+            │   ├── business.py      # Biznes reestri
+            │   ├── location.py      # POI, geolokatsiya
+            │   └── customer.py      # Mijoz demografiyasi
+            └── repositories/
+                ├── __init__.py
+                ├── market_repo.py       # MCC/nisha bo'yicha so'rovlar
+                ├── location_repo.py     # POI, raqobatchilar spatial
+                ├── financial_repo.py    # Sektor benchmarklari
+                └── competition_repo.py  # Yopilish statistikasi
+
+tests/
+├── __init__.py
+├── conftest.py                  # pytest fixtures (test DB, mock agent)
+├── unit/
+│   ├── __init__.py
+│   └── algorithms/
+│       ├── __init__.py
+│       ├── test_saturation.py
+│       ├── test_location.py
+│       ├── test_viability.py
+│       ├── test_roi.py
+│       └── test_churn.py
+└── integration/
+    ├── __init__.py
+    ├── test_api.py              # POST /analyze end-to-end (agent mock)
+    └── test_mcp_tools.py        # MCP tool → real DB so'rovlar
+
+═══════════════════════════════════════════════════════════════════
+ASOSIY FAYLLAR TARKIBI
+═══════════════════════════════════════════════════════════════════
+
+pyproject.toml
+──────────────
+[project]
+name = "ai-fintech-platform"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "anthropic",           # Claude Agent (tool_use + prompt caching)
+    "mcp",                 # MCP server protokoli
+    "numpy",
+    "scipy",               # Monte Carlo, statistika
+    "pandas",
+    "redis",               # Natijalarni keshlash
+    "httpx",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "httpx",
+    "factory-boy",
+]
+
+.env.example
+────────────
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/fintech_db
+ANTHROPIC_API_KEY=sk-ant-...
+REDIS_URL=redis://localhost:6379
+LOG_LEVEL=INFO
+
+═══════════════════════════════════════════════════════════════════
+AGENT ISHLASH JARAYONI (AGENT LOOP)
+═══════════════════════════════════════════════════════════════════
+
+1. Foydalanuvchi so'rovi keladi:
+   { nisha: "Kafe", koordinata: [41.299, 69.240], kapital: 50_000_000 }
+
+2. AgentOrchestrator Claude ga system prompt + user so'rovini yuboradi.
+   System prompt prompt caching bilan — bank qoidalari, 5 model tavsifi.
+
+3. Claude tool_use orqali qadamma-qadam ishlaydi:
+
+   Qadam 1 → MCP tool: get_niche_transactions("Kafe", radius=1000)
+   Qadam 2 → MCP tool: get_competitors(41.299, 69.240, radius=500)
+   Qadam 3 → MCP tool: get_location_poi(41.299, 69.240)
+   Qadam 4 → MCP tool: get_sector_benchmarks("Kafe")
+
+   Qadam 5 → Algorithm tool: run_saturation_index(tranzaksiyalar, raqobatchilar)
+             ← { score: 72, status: "yuqori to'yinganlik" }
+
+   Qadam 6 → Algorithm tool: run_location_score(poi_data, trafik)
+             ← { score: 68, sub_scores: {...} }
+
+   Qadam 7 → Algorithm tool: run_viability_check(kapital, benchmarks)
+             ← { survival_2y: 0.61, breakeven_months: 8, runway_months: 14 }
+
+   Qadam 8 → Algorithm tool: run_roi_estimator(kapital, cashflow)
+             ← { npv: 12_400_000, roi: 0.248, payback_months: 18 }
+
+   Qadam 9 → Algorithm tool: run_churn_prediction(location_score, saturation)
+             ← { closure_probability: 0.38 }
+
+4. Claude barcha natijalarni umumlashtiradi:
+   → Yakuniy qaror: "YO'Q — nisha yuqori to'yingan (72/100),
+     yopilish ehtimoli 38%. ROI ijobiy lekin margin past."
+
+5. AnalysisResponse JSON — dashboard uchun
+
+═══════════════════════════════════════════════════════════════════
+AGENT TOOL TURLARI
+═══════════════════════════════════════════════════════════════════
+
+MCP Tools (DB dan ma'lumot olish):
+  ┌────────────────────────────────────────────────────────────┐
+  │ Tool nomi                 │ Maqsad                        │
+  ├────────────────────────────────────────────────────────────┤
+  │ get_niche_transactions    │ Nisha bo'yicha MCC tranzaksiya │
+  │ get_market_size           │ TAM/SAM nisha hajmi            │
+  │ get_competitors           │ Radius ichidagi raqobatchilar  │
+  │ get_closure_stats         │ Nishada yopilish statistikasi  │
+  │ get_location_poi          │ Lokatsiya atrofida POI         │
+  │ get_traffic_data          │ Piyoda/avto trafik ma'lumoti   │
+  │ get_sector_benchmarks     │ Sektorga xos moliyaviy normlar │
+  │ get_cost_data             │ Ijara, xodim, xom ashyo narxi  │
+  └────────────────────────────────────────────────────────────┘
+
+Algorithm Tools (sof hisob-kitob):
+  ┌────────────────────────────────────────────────────────────┐
+  │ Tool nomi                 │ Model │ Chiqish               │
+  ├────────────────────────────────────────────────────────────┤
+  │ run_saturation_index      │ M-A3  │ float 0–100           │
+  │ run_location_score        │ M-C1  │ float 0–100 + sub     │
+  │ run_viability_check       │ M-D1  │ survival%, breakeven  │
+  │ run_roi_estimator         │ M-D3  │ NPV, ROI, payback     │
+  │ run_churn_prediction      │ M-E2  │ float 0–1             │
+  └────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+SPRINTLAR
+═══════════════════════════════════════════════════════════════════
+
+Sprint 1: Infratuzilma
+  ✦ uv loyiha + FastAPI skeleton + health check
+  ✦ PostgreSQL async connection + ORM modellari
+  ✦ Redis cache (agent natijalarini keshlash)
+  ✦ Anthropic client (tool_use + prompt caching)
+  ✦ MCP server skeleton (mcp lib bilan)
+
+Sprint 2: MCP Tools + DB Repositories
+  ✦ 4 ta repository (market, location, financial, competition)
+  ✦ 8 ta MCP tool (DB so'rovlarini wraplash)
+  ✦ Test DB fixture + integration testlar
+
+Sprint 3: 5 ta Algoritm
+  ✦ saturation_index.py — M-A3
+  ✦ location_score.py   — M-C1
+  ✦ viability_check.py  — M-D1 (Monte Carlo)
+  ✦ roi_estimator.py    — M-D3 (DCF)
+  ✦ churn_prediction.py — M-E2
+  ✦ Har biri uchun unit testlar
+
+Sprint 4: AI Agent
+  ✦ Tool registry (MCP + algorithm toollarni birlashtirish)
+  ✦ Agent loop (tool_use agentic loop)
+  ✦ System prompt + decision prompt (prompt caching)
+  ✦ AgentOrchestrator end-to-end
+
+Sprint 5: Integratsiya + Final
+  ✦ POST /api/v1/analyze end-to-end
+  ✦ Redis kesh (bir xil so'rov qayta hisoblanmasin)
+  ✦ Pytest coverage 80%+
+  ✦ Error handling + logging
+
+═══════════════════════════════════════════════════════════════════
