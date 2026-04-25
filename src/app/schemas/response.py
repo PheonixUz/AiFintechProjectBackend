@@ -49,6 +49,9 @@ class DemandForecastPointOut(BaseModel):
     upper_revenue_uzs: Decimal
     trend_component_uzs: Decimal | None = None
     seasonal_component_uzs: Decimal | None = None
+    macro_adjustment_pct: float = 0.0
+    competitor_pressure_pct: float = 0.0
+    event_flags: list[str] = []
     confidence_level: float
 
 
@@ -62,6 +65,8 @@ class DemandForecastResponse(BaseModel):
     training_sample_size: int
     train_mape_pct: float | None = None
     train_rmse_uzs: Decimal | None = None
+    anomaly_count: int = 0
+    new_competitor_count_recent: int = 0
     analysis_summary: str
     methodology_notes: dict
     points: list[DemandForecastPointOut]

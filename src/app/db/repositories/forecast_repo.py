@@ -1,17 +1,38 @@
 """M-B1 Demand Forecasting repository."""
 
+import math
 from datetime import date
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
+from app.db.models.business import Business
 from app.db.models.forecast import (
     DemandForecastPoint,
     DemandForecastRun,
     NicheMonthlyRevenue,
 )
 from app.db.models.transaction import MCCCategory, Transaction
+
+
+def _bounding_box(
+    lat: float, lon: float, radius_m: float
+) -> tuple[float, float, float, float]:
+    delta_lat = radius_m / 111_000
+    delta_lon = radius_m / (111_000 * math.cos(math.radians(lat)))
+    return lat - delta_lat, lat + delta_lat, lon - delta_lon, lon + delta_lon
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    return 2 * r * math.asin(math.sqrt(a))
 
 
 class ForecastRepository:
@@ -51,27 +72,37 @@ class ForecastRepository:
             end_month=end_month,
         )
 
-    async def get_latest_forecast_run(
+    async def get_recent_new_competitor_count(
         self,
         *,
         mcc_code: str,
         city: str,
-        horizon_months: int,
-    ) -> DemandForecastRun | None:
-        stmt = (
-            select(DemandForecastRun)
-            .options(selectinload(DemandForecastRun.points))
-            .where(
-                DemandForecastRun.mcc_code == mcc_code,
-                DemandForecastRun.city == city,
-                DemandForecastRun.horizon_months == horizon_months,
-                DemandForecastRun.status == "completed",
-            )
-            .order_by(DemandForecastRun.created_at.desc())
-            .limit(1)
+        since_month: date,
+        lat: float | None = None,
+        lon: float | None = None,
+        radius_m: float | None = None,
+    ) -> int:
+        stmt = select(Business).where(
+            Business.mcc_code == mcc_code,
+            Business.city == city,
+            Business.registered_date >= since_month,
         )
+        if lat is not None and lon is not None and radius_m is not None:
+            min_lat, max_lat, min_lon, max_lon = _bounding_box(lat, lon, radius_m)
+            stmt = stmt.where(
+                Business.lat.between(min_lat, max_lat),
+                Business.lon.between(min_lon, max_lon),
+            )
+
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        businesses = list(result.scalars().all())
+        if lat is None or lon is None or radius_m is None:
+            return len(businesses)
+        return sum(
+            1
+            for business in businesses
+            if _haversine_m(lat, lon, business.lat, business.lon) <= radius_m
+        )
 
     async def save_forecast_run(
         self,
@@ -87,6 +118,8 @@ class ForecastRepository:
         training_sample_size: int,
         train_mape_pct: float | None,
         train_rmse_uzs,
+        anomaly_count: int,
+        new_competitor_count_recent: int,
         analysis_summary: str,
         calc_metadata: dict,
         points: list[dict],
@@ -103,6 +136,8 @@ class ForecastRepository:
             training_sample_size=training_sample_size,
             train_mape_pct=train_mape_pct,
             train_rmse_uzs=train_rmse_uzs,
+            anomaly_count=anomaly_count,
+            new_competitor_count_recent=new_competitor_count_recent,
             analysis_summary=analysis_summary,
             calc_metadata=calc_metadata,
             model_name="lstm_prophet_ensemble",

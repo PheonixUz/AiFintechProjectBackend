@@ -121,6 +121,10 @@ class DemandForecastRun(Base):
     train_rmse_uzs: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 2), nullable=True
     )
+    anomaly_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    new_competitor_count_recent: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="completed")
     analysis_summary: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     calc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -183,6 +187,13 @@ class DemandForecastPoint(Base):
     seasonal_component_uzs: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 2), nullable=True
     )
+    macro_adjustment_pct: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0
+    )
+    competitor_pressure_pct: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0
+    )
+    event_flags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
 
     confidence_level: Mapped[float] = mapped_column(Float, nullable=False, default=0.95)
     created_at: Mapped[datetime] = mapped_column(
