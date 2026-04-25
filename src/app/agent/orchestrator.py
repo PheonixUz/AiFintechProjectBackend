@@ -1,31 +1,24 @@
 """
 M-A1 Market Sizing agenti.
 
-LangGraph + LangChain orqali ishlaydi (Gemini modeli):
-  1. Gemini get_market_data toolni chaqiradi (LangGraph ReAct loop)
+Gemini modeli orqali ishlaydi:
+  1. execute_get_market_data() to'g'ridan-to'g'ri chaqiriladi (DB)
   2. Natijalar algoritmga uzatiladi
   3. Gemini yakuniy tahlilni o'zbek tilida yozadi
 
 Arxitektura:
   MarketSizingAgent.run()
-    → LangGraph (agent → tools → agent loop)
-    → execute_get_market_data() [DB]
+    → execute_get_market_data() [DB — to'g'ridan-to'g'ri]
     → run_market_sizing() [pure algorithm]
     → Gemini (final synthesis)
     → MarketSizingResponse
 """
 
-import json
 import logging
 from decimal import Decimal
-from typing import Annotated, TypedDict
 
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
-from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.prompts.system import MARKET_SIZING_SYSTEM
@@ -51,24 +44,6 @@ _DEFAULT_BENCHMARK = {
 }
 
 
-class _State(TypedDict):
-    messages: Annotated[list, add_messages]
-
-
-def _build_user_message(req: MarketSizingRequest) -> str:
-    return (
-        f"Quyidagi biznes uchun TAM/SAM/SOM bozor hajmini hisoblang:\n"
-        f"  Nisha        : {req.niche}\n"
-        f"  MCC kod      : {req.mcc_code}\n"
-        f"  Lokatsiya    : lat={req.lat}, lon={req.lon}\n"
-        f"  Radius       : {req.radius_m} metr\n"
-        f"  Shahar       : {req.city}\n"
-        f"  Yil          : {req.year}\n"
-        f"  Kapital      : {req.capital_uzs:,} UZS\n\n"
-        "get_market_data toolni chaqiring va natijalar asosida tahlil bering."
-    )
-
-
 def _build_algorithm_input(
     market_data: dict,
     quality_factor: float = 1.0,
@@ -85,6 +60,33 @@ def _build_algorithm_input(
         gross_margin_pct=bm["gross_margin_pct"],
         transaction_sample_size=market_data["transaction_sample_size"],
         quality_factor=quality_factor,
+    )
+
+
+def _cached_to_result(
+    cached: dict, bm: dict, market_data: dict
+) -> "MarketSizingResult":
+    """Kesh ma'lumotlaridan MarketSizingResult yasaydi (synthesis uchun)."""
+    tam = Decimal(cached["tam_uzs"])
+    sam = Decimal(cached["sam_uzs"])
+    som = Decimal(cached["som_uzs"])
+    return MarketSizingResult(
+        tam_uzs=tam,
+        sam_uzs=sam,
+        som_uzs=som,
+        tam_low_uzs=tam * Decimal("0.70"),
+        tam_high_uzs=tam * Decimal("1.30"),
+        sam_low_uzs=sam * Decimal("0.70"),
+        sam_high_uzs=sam * Decimal("1.30"),
+        som_low_uzs=som * Decimal("0.70"),
+        som_high_uzs=som * Decimal("1.30"),
+        market_share_pct=round(100 / (market_data["competitor_count_radius"] + 1), 2),
+        market_growth_rate_pct=bm["annual_growth_rate_pct"],
+        gross_margin_pct=bm["gross_margin_pct"],
+        competitor_count_radius=market_data["competitor_count_radius"],
+        confidence_score=cached["confidence_score"],
+        data_weight=1.0,
+        methodology_notes={"source": "cache", "date": cached["calculation_date"]},
     )
 
 
@@ -120,92 +122,43 @@ class MarketSizingAgent:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    def _make_tools(self) -> list:
-        session = self._session
+    async def run(self, req: MarketSizingRequest) -> MarketSizingResponse:
+        # 1. DB dan ma'lumot olish (to'g'ridan-to'g'ri, LLM orqali emas)
+        market_data = await execute_get_market_data(
+            self._session,
+            mcc_code=req.mcc_code,
+            niche=req.niche,
+            lat=req.lat,
+            lon=req.lon,
+            radius_m=req.radius_m,
+            city=req.city,
+            year=req.year,
+        )
+        logger.debug("market_data keys=%s", list(market_data.keys()))
 
-        @tool
-        async def get_market_data(
-            mcc_code: str,
-            niche: str,
-            lat: float,
-            lon: float,
-            radius_m: float,
-            city: str,
-            year: int,
-        ) -> str:
-            """Bazadan TAM/SAM tranzaksiyalari, raqobatchilar va benchmark oladi."""
-            result = await execute_get_market_data(
-                session,
-                mcc_code=mcc_code,
-                niche=niche,
-                lat=lat,
-                lon=lon,
-                radius_m=radius_m,
-                city=city,
-                year=year,
-            )
-            return json.dumps(result, ensure_ascii=False)
-
-        return [get_market_data]
-
-    def _build_graph(self, tools: list):
         llm = ChatGoogleGenerativeAI(
             model=_MODEL,
             google_api_key=settings.google_api_key,
         )
-        llm_with_tools = llm.bind_tools(tools)
 
-        async def call_model(state: _State) -> dict:
-            response = await llm_with_tools.ainvoke(state["messages"])
-            logger.debug("Gemini response type=%s", type(response).__name__)
-            return {"messages": [response]}
-
-        def should_continue(state: _State) -> str:
-            last = state["messages"][-1]
-            if getattr(last, "tool_calls", None):
-                return "tools"
-            return END
-
-        graph = StateGraph(_State)
-        graph.add_node("agent", call_model)
-        graph.add_node("tools", ToolNode(tools))
-        graph.set_entry_point("agent")
-        graph.add_conditional_edges("agent", should_continue)
-        graph.add_edge("tools", "agent")
-
-        return graph.compile()
-
-    async def run(self, req: MarketSizingRequest) -> MarketSizingResponse:
-        tools = self._make_tools()
-        graph = self._build_graph(tools)
-
-        result = await graph.ainvoke(
-            {
-                "messages": [
-                    SystemMessage(content=MARKET_SIZING_SYSTEM),
-                    HumanMessage(content=_build_user_message(req)),
-                ]
-            }
-        )
-
-        # ToolMessage dan market_data ni ajratib olish
-        market_data: dict | None = None
-        for msg in result["messages"]:
-            if isinstance(msg, ToolMessage):
-                try:
-                    market_data = json.loads(msg.content)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                break
-
-        if market_data is None:
-            raise RuntimeError("Agent get_market_data toolni chaqirmadi")
-
-        # Keshdan qaytarish
+        # 2. Keshdan qaytarish
         if market_data.get("cached_estimate"):
             cached = market_data["cached_estimate"]
-            analysis_text = self._last_ai_text(result["messages"])
             bm = market_data.get("benchmark") or _DEFAULT_BENCHMARK
+            synthesis = await llm.ainvoke(
+                [
+                    SystemMessage(content=MARKET_SIZING_SYSTEM),
+                    HumanMessage(
+                        content=_build_synthesis_prompt(
+                            req,
+                            _cached_to_result(cached, bm, market_data),
+                        )
+                    ),
+                ]
+            )
+            analysis_text = (
+                synthesis.content if isinstance(synthesis.content, str) else ""
+            )
             return MarketSizingResponse(
                 niche=req.niche,
                 city=req.city,
@@ -234,15 +187,11 @@ class MarketSizingAgent:
                 from_cache=True,
             )
 
-        # Algorithm hisoblash
+        # 3. Algorithm hisoblash
         algo_input = _build_algorithm_input(market_data)
         algo_result = run_market_sizing(algo_input)
 
-        # Gemini tahlili
-        llm = ChatGoogleGenerativeAI(
-            model=_MODEL,
-            google_api_key=settings.google_api_key,
-        )
+        # 4. Gemini tahlili
         synthesis = await llm.ainvoke(
             [
                 SystemMessage(content=MARKET_SIZING_SYSTEM),
@@ -273,12 +222,3 @@ class MarketSizingAgent:
             analysis_summary=analysis_text,
             from_cache=False,
         )
-
-    @staticmethod
-    def _last_ai_text(messages: list) -> str:
-        for msg in reversed(messages):
-            if not isinstance(msg, (HumanMessage, ToolMessage, SystemMessage)):
-                content = getattr(msg, "content", "")
-                if isinstance(content, str):
-                    return content
-        return ""
