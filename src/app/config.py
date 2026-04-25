@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     # Google Gemini
     google_api_key: str = ""
+    google_model: str = "gemini-2.5-flash"
 
     # Redis
     redis_url: str = "redis://localhost:6379"
