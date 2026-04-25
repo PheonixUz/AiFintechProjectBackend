@@ -34,7 +34,7 @@ from app.schemas.response import MarketSizingResponse
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "gemini-2.0-flash"
+_MODEL = settings.google_model
 _DEFAULT_BENCHMARK = {
     "avg_monthly_revenue_uzs": "50000000",
     "median_monthly_revenue_uzs": "40000000",
