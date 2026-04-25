@@ -21,6 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import settings
 from app.db.models.business import Business
+from app.db.models.churn import (
+    ChurnFeatureSnapshot,
+    ChurnModelVersion,
+    ChurnPredictionRun,
+    ChurnRiskFactor,
+)
 from app.db.models.customer import CustomerSegment
 from app.db.models.financial import (
     SectorFinancialBenchmark,
@@ -241,6 +247,22 @@ async def seed_businesses(session: AsyncSession, mcc_data: list[tuple]) -> None:
                     registered_date=opened,
                     closed_date=closed_date,
                     is_active=is_active,
+                    last_observed_active_date=closed_date or today,
+                    closure_reason=(
+                        random.choice(
+                            [
+                                "revenue_drop",
+                                "low_transaction_activity",
+                                "high_competition",
+                                "owner_exit",
+                            ]
+                        )
+                        if closed_date
+                        else None
+                    ),
+                    closure_confidence_score=(
+                        round(random.uniform(0.72, 0.96), 2) if closed_date else None
+                    ),
                     employee_count_est=random.randint(1, 25),
                     monthly_revenue_est_uzs=uzs(random.randint(3_000_000, 50_000_000)),
                     area_sqm=round(random.uniform(20, 300), 1),
@@ -906,10 +928,285 @@ async def seed_viability_check(
     )
 
 
+def months_between(start: date, end: date) -> int:
+    return max(0, (end.year - start.year) * 12 + end.month - start.month)
+
+
+def churn_risk_bucket(probability: float) -> str:
+    if probability >= 0.70:
+        return "critical"
+    if probability >= 0.45:
+        return "high"
+    if probability >= 0.25:
+        return "medium"
+    return "low"
+
+
+async def seed_churn_prediction(session: AsyncSession) -> None:
+    print("  M-E2 Churn Prediction ma'lumotlari yozilmoqda...")
+
+    existing = await session.execute(select(ChurnPredictionRun).limit(1))
+    if existing.scalar() is not None:
+        print("    Churn Prediction ma'lumotlari mavjud, o'tkazib yuborildi")
+        return
+
+    result = await session.execute(select(Business).order_by(Business.id).limit(80))
+    businesses = list(result.scalars().all())
+    if not businesses:
+        print("    Business ma'lumotlari topilmadi, o'tkazib yuborildi")
+        return
+
+    feature_names = [
+        "business_age_months",
+        "revenue_trend_6m_pct",
+        "revenue_volatility_12m_pct",
+        "revenue_drop_last_3m_pct",
+        "zero_revenue_months_12m",
+        "tx_count_trend_6m_pct",
+        "inactive_days_last_90d",
+        "competitor_density_score",
+        "nearby_closed_businesses_24m",
+        "district_failure_rate_24m_pct",
+        "macro_risk_score",
+        "seasonality_risk_score",
+    ]
+    model_version = ChurnModelVersion(
+        model_name="xgboost_smb_churn",
+        model_version="mock-v1-2026-04",
+        algorithm="XGBoost",
+        training_sample_size=50_000,
+        positive_label_rate=0.28,
+        auc_roc=0.86,
+        auc_pr=0.62,
+        f1_score=0.71,
+        calibration_error=0.045,
+        feature_names=feature_names,
+        hyperparameters={
+            "max_depth": 5,
+            "n_estimators": 450,
+            "learning_rate": 0.045,
+            "subsample": 0.85,
+            "colsample_bytree": 0.80,
+            "objective": "binary:logistic",
+        },
+        training_period_start=date(2022, 1, 1),
+        training_period_end=date(2026, 3, 31),
+        is_active=True,
+    )
+    session.add(model_version)
+    await session.flush()
+
+    as_of_date = date(2026, 4, 25)
+    snapshots: list[ChurnFeatureSnapshot] = []
+    runs: list[ChurnPredictionRun] = []
+    risk_factors: list[ChurnRiskFactor] = []
+    closure_reasons = [
+        "revenue_drop",
+        "low_transaction_activity",
+        "high_competition",
+        "rent_pressure",
+        "owner_exit",
+    ]
+
+    for business in businesses:
+        age_months = months_between(business.registered_date, as_of_date)
+        is_closed = business.closed_date is not None or not business.is_active
+        if is_closed and business.closed_date is None:
+            earliest_close = business.registered_date + timedelta(days=180)
+            business.closed_date = rand_date(earliest_close, as_of_date)
+        business.last_observed_active_date = business.closed_date or as_of_date
+        business.closure_reason = (
+            business.closure_reason or random.choice(closure_reasons)
+            if is_closed
+            else None
+        )
+        business.closure_confidence_score = (
+            business.closure_confidence_score or round(random.uniform(0.75, 0.97), 2)
+            if is_closed
+            else None
+        )
+
+        base_revenue = float(business.monthly_revenue_est_uzs or Decimal("15000000"))
+        weak_signal = 1.0 if is_closed else random.uniform(0.0, 0.7)
+        revenue_drop = round(random.uniform(0.10, 0.65) * weak_signal, 3)
+        revenue_trend = round(random.uniform(-0.55, 0.18) * (0.4 + weak_signal), 3)
+        revenue_volatility = round(random.uniform(0.08, 0.55) + weak_signal * 0.12, 3)
+        zero_months = random.randint(2, 8) if is_closed else random.randint(0, 3)
+        tx_trend = round(revenue_trend * random.uniform(0.75, 1.25), 3)
+        inactive_days = random.randint(25, 90) if is_closed else random.randint(0, 35)
+        active_days = max(0, 90 - inactive_days)
+        competitor_count = random.randint(3, 45)
+        competitor_density = round(min(1.0, competitor_count / 40), 3)
+        closed_nearby = random.randint(0, 12)
+        district_failure = round(random.uniform(0.12, 0.48), 3)
+        macro_risk = round(random.uniform(0.10, 0.55), 3)
+        seasonality_risk = round(random.uniform(0.05, 0.45), 3)
+        data_quality = round(random.uniform(0.70, 0.95), 3)
+
+        revenue_12m = Decimal(str(round(base_revenue * random.uniform(0.85, 1.10), 2)))
+        revenue_6m = Decimal(str(round(base_revenue * (1 + revenue_trend / 2), 2)))
+        revenue_3m = Decimal(str(round(base_revenue * (1 - revenue_drop), 2)))
+        tx_12m = random.uniform(120, 2600)
+        tx_3m = max(1.0, tx_12m * (1 + tx_trend))
+        avg_ticket_3m = revenue_3m / Decimal(str(max(tx_3m, 1)))
+        ticket_change = round(random.uniform(-0.25, 0.18), 3)
+
+        risk_components = {
+            "revenue_drop_last_3m_pct": revenue_drop * 0.30,
+            "negative_revenue_trend_6m": max(0.0, -revenue_trend) * 0.24,
+            "inactive_days_last_90d": inactive_days / 90 * 0.18,
+            "revenue_volatility_12m_pct": revenue_volatility * 0.14,
+            "competitor_density_score": competitor_density * 0.10,
+            "district_failure_rate_24m_pct": district_failure * 0.08,
+            "zero_revenue_months_12m": zero_months / 12 * 0.18,
+        }
+        raw_probability = 0.08 + sum(risk_components.values())
+        if is_closed:
+            raw_probability += 0.22
+        closure_probability = round(max(0.02, min(0.96, raw_probability)), 4)
+        survival_probability = round(1 - closure_probability, 4)
+        risk_bucket = churn_risk_bucket(closure_probability)
+        risk_score = round(closure_probability * 100, 1)
+
+        target_closed_within_24m = None
+        if business.closed_date:
+            target_closed_within_24m = (
+                months_between(business.registered_date, business.closed_date) <= 24
+            )
+
+        snapshot = ChurnFeatureSnapshot(
+            business_id=business.id,
+            mcc_code=business.mcc_code,
+            niche=business.niche,
+            city=business.city,
+            district=business.district,
+            lat=business.lat,
+            lon=business.lon,
+            radius_m=1000.0,
+            as_of_date=as_of_date,
+            business_age_months=age_months,
+            employee_count_est=business.employee_count_est,
+            area_sqm=business.area_sqm,
+            revenue_3m_avg_uzs=revenue_3m,
+            revenue_6m_avg_uzs=revenue_6m,
+            revenue_12m_avg_uzs=revenue_12m,
+            revenue_trend_6m_pct=revenue_trend,
+            revenue_volatility_12m_pct=revenue_volatility,
+            revenue_drop_last_3m_pct=revenue_drop,
+            zero_revenue_months_12m=zero_months,
+            tx_count_3m_avg=round(tx_3m, 1),
+            tx_count_12m_avg=round(tx_12m, 1),
+            tx_count_trend_6m_pct=tx_trend,
+            avg_ticket_3m_uzs=avg_ticket_3m.quantize(Decimal("0.01")),
+            avg_ticket_change_6m_pct=ticket_change,
+            active_days_last_90d=active_days,
+            inactive_days_last_90d=inactive_days,
+            online_share_12m_pct=round(random.uniform(0.03, 0.35), 3),
+            competitor_count_radius=competitor_count,
+            competitor_density_score=competitor_density,
+            nearby_closed_businesses_24m=closed_nearby,
+            district_failure_rate_24m_pct=district_failure,
+            macro_risk_score=macro_risk,
+            seasonality_risk_score=seasonality_risk,
+            data_quality_score=data_quality,
+            target_closed_within_24m=target_closed_within_24m,
+            target_closed_date=business.closed_date,
+            raw_features={
+                "source": "seed_db.py",
+                "is_fake_data": True,
+                "risk_components": risk_components,
+            },
+        )
+        session.add(snapshot)
+        await session.flush()
+        snapshots.append(snapshot)
+
+        top_factors = sorted(
+            risk_components.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:3]
+        top_names = [name for name, _ in top_factors]
+        run = ChurnPredictionRun(
+            business_id=business.id,
+            feature_snapshot_id=snapshot.id,
+            model_version_id=model_version.id,
+            mcc_code=business.mcc_code,
+            niche=business.niche,
+            city=business.city,
+            as_of_date=as_of_date,
+            prediction_horizon_months=24,
+            closure_probability_24m=closure_probability,
+            survival_probability_24m=survival_probability,
+            risk_bucket=risk_bucket,
+            risk_score=risk_score,
+            confidence_score=round(data_quality * random.uniform(0.88, 0.98), 3),
+            top_factor_1=top_names[0],
+            top_factor_2=top_names[1],
+            top_factor_3=top_names[2],
+            prediction_summary=(
+                f"{business.niche} biznesi uchun 24 oy ichida yopilish ehtimoli "
+                f"{closure_probability:.0%}. Top risklar: "
+                f"{', '.join(top_names)}."
+            ),
+            calc_metadata={
+                "source": "seed_db.py",
+                "method": "xgboost_mock_scorecard",
+                "model_family": "XGBoost",
+                "is_fake_data": True,
+            },
+        )
+        session.add(run)
+        await session.flush()
+        runs.append(run)
+
+        factor_labels = {
+            "revenue_drop_last_3m_pct": "So'nggi 3 oy revenue pasayishi",
+            "negative_revenue_trend_6m": "6 oylik revenue trend manfiy",
+            "inactive_days_last_90d": "So'nggi 90 kunda faol bo'lmagan kunlar",
+            "revenue_volatility_12m_pct": "Revenue volatility yuqori",
+            "competitor_density_score": "Raqobatchilar zichligi yuqori",
+            "district_failure_rate_24m_pct": "Tuman bo'yicha yopilish darajasi",
+            "zero_revenue_months_12m": "12 oy ichida revenue bo'lmagan oylar",
+        }
+        for rank, (factor_name, impact) in enumerate(top_factors, start=1):
+            risk_factors.append(
+                ChurnRiskFactor(
+                    prediction_run_id=run.id,
+                    rank=rank,
+                    factor_name=factor_name,
+                    factor_group=(
+                        "revenue"
+                        if "revenue" in factor_name or "tx" in factor_name
+                        else "competition"
+                        if "competitor" in factor_name or "district" in factor_name
+                        else "activity"
+                    ),
+                    factor_value=str(round(impact, 4)),
+                    baseline_value="mock_sector_baseline",
+                    impact_score=round(impact, 4),
+                    direction="increases_risk",
+                    explanation=factor_labels[factor_name],
+                )
+            )
+
+    session.add_all(risk_factors)
+    await session.flush()
+    print(
+        f"    1 ta model version, {len(snapshots)} ta feature snapshot, "
+        f"{len(runs)} ta prediction run, "
+        f"{len(risk_factors)} ta risk factor qo'shildi"
+    )
+
+
 async def clear_tables(session: AsyncSession) -> None:
     print("  Jadvallar tozalanmoqda...")
     # Foreign key tartibiga rioya qilib o'chirish
     for table in [
+        "churn_risk_factors",
+        "churn_prediction_runs",
+        "churn_feature_snapshots",
+        "churn_model_versions",
         "viability_cashflow_months",
         "viability_check_runs",
         "viability_plan_assumptions",
@@ -939,6 +1236,7 @@ async def main(
     clear: bool = False,
     forecast_only: bool = False,
     viability_only: bool = False,
+    churn_only: bool = False,
 ) -> None:
     print(f"\n=== Fake data seed ({CITY}) ===\n")
 
@@ -947,6 +1245,10 @@ async def main(
 
     async with Session() as session:
         async with session.begin():
+            if churn_only:
+                await seed_churn_prediction(session)
+                return
+
             if viability_only:
                 stmt = select(MCCCategory).order_by(MCCCategory.id)
                 result = await session.execute(stmt)
@@ -1000,6 +1302,7 @@ async def main(
             await seed_market_size_estimates(session, mcc_data_clean)
             await seed_demand_forecasting(session, categories)
             await seed_viability_check(session, categories)
+            await seed_churn_prediction(session)
 
     await engine.dispose()
     print("\n=== Seed muvaffaqiyatli yakunlandi! ===\n")
@@ -1022,11 +1325,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Faqat M-D1 viability check fake data jadvallarini to'ldirish",
     )
+    parser.add_argument(
+        "--churn-only",
+        action="store_true",
+        help="Faqat M-E2 churn prediction fake data jadvallarini to'ldirish",
+    )
     args = parser.parse_args()
     asyncio.run(
         main(
             clear=args.clear,
             forecast_only=args.forecast_only,
             viability_only=args.viability_only,
+            churn_only=args.churn_only,
         )
     )

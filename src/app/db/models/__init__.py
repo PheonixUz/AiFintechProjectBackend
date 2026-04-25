@@ -1,5 +1,11 @@
 from app.db.models.base import Base, TimestampMixin
 from app.db.models.business import Business
+from app.db.models.churn import (
+    ChurnFeatureSnapshot,
+    ChurnModelVersion,
+    ChurnPredictionRun,
+    ChurnRiskFactor,
+)
 from app.db.models.customer import CustomerSegment
 from app.db.models.financial import (
     SectorFinancialBenchmark,
@@ -19,6 +25,10 @@ from app.db.models.transaction import MCCCategory, Transaction
 __all__ = [
     "Base",
     "TimestampMixin",
+    "ChurnModelVersion",
+    "ChurnFeatureSnapshot",
+    "ChurnPredictionRun",
+    "ChurnRiskFactor",
     "MCCCategory",
     "Transaction",
     "Business",
