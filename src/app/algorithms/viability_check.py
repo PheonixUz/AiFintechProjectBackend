@@ -156,8 +156,8 @@ def run_viability_check(data: ViabilityModelInput) -> ViabilityModelResult:
         cash_paths[:, month_idx] = cumulative_cash
 
     final_cash = cash_paths[:, -1]
-    min_cash_by_path = cash_paths.min(axis=1)
-    survived = min_cash_by_path >= 0
+    min_cash_with_initial = np.minimum(cash_paths.min(axis=1), initial_cash)
+    survived = min_cash_with_initial >= 0
     survival_probability_raw = float(np.mean(survived))
     survival_probability = survival_probability_raw * (1 - failure_prior * 0.35)
     survival_probability = max(0.01, min(0.99, survival_probability))
@@ -165,11 +165,23 @@ def run_viability_check(data: ViabilityModelInput) -> ViabilityModelResult:
 
     first_negative = np.argmax(cash_paths < 0, axis=1) + 1
     never_negative = np.all(cash_paths >= 0, axis=1)
-    runway_months = float(np.median(np.where(never_negative, months, first_negative)))
+    if initial_cash < 0:
+        runway_months = 0.0
+    else:
+        runway_months = float(
+            np.median(np.where(never_negative, months, first_negative))
+        )
 
-    first_positive = np.argmax(cash_paths >= 0, axis=1) + 1
-    ever_positive = np.any(cash_paths >= 0, axis=1)
-    break_even_paths = np.where(ever_positive, first_positive, months + 1)
+    break_even_flags = net_cashflow_paths >= 0
+    stable_break_even = np.zeros_like(break_even_flags, dtype=bool)
+    for month_idx in range(months - 2):
+        stable_break_even[:, month_idx] = np.all(
+            break_even_flags[:, month_idx : month_idx + 3],
+            axis=1,
+        )
+    first_break_even = np.argmax(stable_break_even, axis=1) + 1
+    ever_break_even = np.any(stable_break_even, axis=1)
+    break_even_paths = np.where(ever_break_even, first_break_even, months + 1)
     probability_break_even = float(np.mean(break_even_paths <= min(24, months)))
     break_even_month = (
         int(np.median(break_even_paths[break_even_paths <= months]))
@@ -217,7 +229,7 @@ def run_viability_check(data: ViabilityModelInput) -> ViabilityModelResult:
     p10_final = float(np.quantile(final_cash, 0.10))
     median_final = float(np.quantile(final_cash, 0.50))
     p90_final = float(np.quantile(final_cash, 0.90))
-    worst_month_cash = float(np.quantile(cash_paths.min(axis=1), 0.10))
+    worst_month_cash = float(np.quantile(min_cash_with_initial, 0.10))
     min_required_capital = max(0.0, -worst_month_cash)
 
     margin_score = max(0.0, min(1.0, (data.gross_margin_pct - 0.15) / 0.45))
