@@ -70,3 +70,48 @@ class DemandForecastResponse(BaseModel):
     analysis_summary: str
     methodology_notes: dict
     points: list[DemandForecastPointOut]
+
+
+class ViabilityCashflowMonthOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month_index: int
+    expected_revenue_uzs: Decimal
+    p10_revenue_uzs: Decimal
+    p90_revenue_uzs: Decimal
+    variable_cost_uzs: Decimal
+    fixed_cost_uzs: Decimal
+    loan_payment_uzs: Decimal
+    tax_uzs: Decimal
+    net_cashflow_uzs: Decimal
+    cumulative_cash_p10_uzs: Decimal
+    cumulative_cash_p50_uzs: Decimal
+    cumulative_cash_p90_uzs: Decimal
+    probability_negative_cash: float
+    is_break_even_month: bool
+
+
+class ViabilityCheckResponse(BaseModel):
+    run_id: int
+    assumption_id: int | None
+    niche: str
+    mcc_code: str
+    city: str
+    simulation_months: int
+    monte_carlo_iterations: int
+    break_even_month: int | None
+    runway_months: float
+    survival_probability_24m: float
+    cash_out_probability_24m: float
+    probability_break_even_24m: float
+    median_final_cash_uzs: Decimal
+    p10_final_cash_uzs: Decimal
+    p90_final_cash_uzs: Decimal
+    worst_month_cash_uzs: Decimal
+    min_required_capital_uzs: Decimal
+    viability_score: float
+    recommendation: str
+    confidence_score: float
+    analysis_summary: str
+    methodology_notes: dict
+    cashflow_months: list[ViabilityCashflowMonthOut]

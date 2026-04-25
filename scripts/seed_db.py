@@ -22,6 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 from app.db.models.business import Business
 from app.db.models.customer import CustomerSegment
+from app.db.models.financial import (
+    SectorFinancialBenchmark,
+    ViabilityCashflowMonth,
+    ViabilityCheckRun,
+    ViabilityPlanAssumption,
+)
 from app.db.models.forecast import (
     DemandForecastPoint,
     DemandForecastRun,
@@ -346,8 +352,9 @@ async def seed_poi(session: AsyncSession) -> None:
             for k in range(count):
                 lat, lon = rand_coord_near(dlat, dlon, 2.5)
                 capacity = random.randint(cap_min, cap_max)
+                poi_suffix = f" #{k + 1}" if count > 1 else ""
                 p = PointOfInterest(
-                    name=f"{base_name} ({district_name}){' #' + str(k + 1) if count > 1 else ''}",
+                    name=f"{base_name} ({district_name}){poi_suffix}",
                     poi_type=poi_type,
                     lat=lat,
                     lon=lon,
@@ -445,6 +452,7 @@ async def seed_market_size_estimates(
 
 # ─── Asosiy funksiya ──────────────────────────────────────────────────────────
 
+
 async def seed_demand_forecasting(
     session: AsyncSession, categories: list[MCCCategory]
 ) -> None:
@@ -532,8 +540,11 @@ async def seed_demand_forecasting(
 
             for h in range(1, horizon + 1):
                 forecast_month = add_months(forecast_start, h - 1)
-                is_high_season = (
-                    (forecast_month.month + seasonality_shift) % 12 in (3, 4, 10, 11)
+                is_high_season = (forecast_month.month + seasonality_shift) % 12 in (
+                    3,
+                    4,
+                    10,
+                    11,
                 )
                 seasonal_factor = Decimal("1.10") if is_high_season else Decimal("0.97")
                 growth_factor = Decimal(str((1 + monthly_growth) ** h))
@@ -571,10 +582,338 @@ async def seed_demand_forecasting(
     )
 
 
+async def seed_viability_check(
+    session: AsyncSession, categories: list[MCCCategory]
+) -> None:
+    print("  M-D1 Viability Check ma'lumotlari yozilmoqda...")
+
+    existing = await session.execute(select(ViabilityCheckRun).limit(1))
+    if existing.scalar() is not None:
+        print("    Viability Check ma'lumotlari mavjud, o'tkazib yuborildi")
+        return
+
+    if not categories:
+        print("    MCC kategoriyalar topilmadi, o'tkazib yuborildi")
+        return
+
+    sector_profiles = {
+        "Oziq-ovqat": {
+            "margin": 0.32,
+            "variable": 0.68,
+            "fixed": 0.22,
+            "payroll": 0.13,
+            "rent": 0.07,
+            "marketing": 0.03,
+            "revenue": 95_000_000,
+            "volatility": 0.18,
+            "growth": 0.014,
+            "capex": 180_000_000,
+            "failure": 0.32,
+        },
+        "Sog'liqni saqlash": {
+            "margin": 0.42,
+            "variable": 0.58,
+            "fixed": 0.20,
+            "payroll": 0.16,
+            "rent": 0.06,
+            "marketing": 0.02,
+            "revenue": 80_000_000,
+            "volatility": 0.12,
+            "growth": 0.011,
+            "capex": 220_000_000,
+            "failure": 0.24,
+        },
+        "Kiyim-kechak": {
+            "margin": 0.46,
+            "variable": 0.54,
+            "fixed": 0.26,
+            "payroll": 0.12,
+            "rent": 0.10,
+            "marketing": 0.05,
+            "revenue": 120_000_000,
+            "volatility": 0.27,
+            "growth": 0.010,
+            "capex": 260_000_000,
+            "failure": 0.38,
+        },
+        "Xizmatlar": {
+            "margin": 0.55,
+            "variable": 0.45,
+            "fixed": 0.25,
+            "payroll": 0.20,
+            "rent": 0.07,
+            "marketing": 0.04,
+            "revenue": 60_000_000,
+            "volatility": 0.22,
+            "growth": 0.012,
+            "capex": 140_000_000,
+            "failure": 0.34,
+        },
+    }
+    default_profile = {
+        "margin": 0.40,
+        "variable": 0.60,
+        "fixed": 0.24,
+        "payroll": 0.14,
+        "rent": 0.08,
+        "marketing": 0.04,
+        "revenue": 85_000_000,
+        "volatility": 0.23,
+        "growth": 0.011,
+        "capex": 200_000_000,
+        "failure": 0.35,
+    }
+
+    benchmarks: list[SectorFinancialBenchmark] = []
+    assumptions: list[ViabilityPlanAssumption] = []
+    runs: list[ViabilityCheckRun] = []
+    cashflow_months: list[ViabilityCashflowMonth] = []
+
+    for idx, category in enumerate(categories[:10]):
+        profile = sector_profiles.get(category.parent_category, default_profile)
+        base_revenue = int(profile["revenue"] * random.uniform(0.82, 1.22))
+        startup_capex = int(profile["capex"] * random.uniform(0.85, 1.20))
+        gross_margin = round(profile["margin"] * random.uniform(0.94, 1.06), 3)
+        variable_cost = round(max(0.1, 1 - gross_margin), 3)
+        fixed_cost = int(base_revenue * profile["fixed"] * random.uniform(0.88, 1.12))
+        rent = int(fixed_cost * profile["rent"] / profile["fixed"])
+        payroll = int(fixed_cost * profile["payroll"] / profile["fixed"])
+        marketing = int(fixed_cost * profile["marketing"] / profile["fixed"])
+        utilities = int(fixed_cost * 0.08)
+        other_fixed = max(0, fixed_cost - rent - payroll - marketing - utilities)
+        initial_capital = int(startup_capex * random.uniform(1.25, 1.75))
+        working_capital = max(0, initial_capital - startup_capex)
+        loan_amount = int(startup_capex * random.uniform(0.15, 0.45))
+        loan_payment = int(loan_amount / 24 * random.uniform(1.04, 1.14))
+        lat, lon = rand_coord_near(*TASHKENT_CENTER, radius_km=4.0)
+        seasonality_shift = random.randint(0, 11)
+
+        existing_benchmark = await session.execute(
+            select(SectorFinancialBenchmark).where(
+                SectorFinancialBenchmark.mcc_code == category.mcc_code,
+                SectorFinancialBenchmark.city == CITY,
+                SectorFinancialBenchmark.data_year == 2026,
+            )
+        )
+        if existing_benchmark.scalar() is None:
+            benchmark = SectorFinancialBenchmark(
+                mcc_code=category.mcc_code,
+                niche=category.niche_name_uz,
+                city=CITY,
+                gross_margin_pct=gross_margin,
+                variable_cost_pct=variable_cost,
+                fixed_cost_ratio_pct=round(profile["fixed"], 3),
+                payroll_cost_ratio_pct=round(profile["payroll"], 3),
+                rent_cost_ratio_pct=round(profile["rent"], 3),
+                marketing_cost_ratio_pct=round(profile["marketing"], 3),
+                avg_monthly_revenue_uzs=Decimal(base_revenue),
+                median_monthly_revenue_uzs=Decimal(int(base_revenue * 0.88)),
+                revenue_volatility_pct=round(profile["volatility"], 3),
+                monthly_growth_pct=round(profile["growth"], 4),
+                startup_capex_p25_uzs=Decimal(int(startup_capex * 0.75)),
+                startup_capex_median_uzs=Decimal(startup_capex),
+                startup_capex_p75_uzs=Decimal(int(startup_capex * 1.35)),
+                working_capital_months=round(random.uniform(2.5, 5.0), 1),
+                two_year_failure_rate_pct=round(profile["failure"], 3),
+                data_year=2026,
+                data_source="synthetic_financial_model",
+                notes={
+                    "source": "seed_db.py",
+                    "purpose": "M-D1 Viability Check test data",
+                    "is_fake_data": True,
+                },
+            )
+            session.add(benchmark)
+            benchmarks.append(benchmark)
+
+        assumption = ViabilityPlanAssumption(
+            plan_name=f"{category.niche_name_uz} viability scenario #{idx + 1}",
+            mcc_code=category.mcc_code,
+            niche=category.niche_name_uz,
+            city=CITY,
+            lat=lat,
+            lon=lon,
+            radius_m=random.choice([1000.0, 2500.0, 5000.0]),
+            initial_capital_uzs=Decimal(initial_capital),
+            startup_capex_uzs=Decimal(startup_capex),
+            working_capital_uzs=Decimal(working_capital),
+            loan_amount_uzs=Decimal(loan_amount),
+            monthly_loan_payment_uzs=Decimal(loan_payment),
+            expected_monthly_revenue_uzs=Decimal(base_revenue),
+            avg_ticket_uzs=Decimal(random.randint(35_000, 220_000)),
+            expected_monthly_transactions=random.randint(450, 3500),
+            gross_margin_pct=gross_margin,
+            variable_cost_pct=variable_cost,
+            monthly_fixed_cost_uzs=Decimal(fixed_cost),
+            monthly_rent_uzs=Decimal(rent),
+            monthly_payroll_uzs=Decimal(payroll),
+            monthly_utilities_uzs=Decimal(utilities),
+            monthly_marketing_uzs=Decimal(marketing),
+            monthly_other_fixed_uzs=Decimal(other_fixed),
+            monthly_revenue_growth_pct=round(profile["growth"], 4),
+            revenue_volatility_pct=round(profile["volatility"], 3),
+            tax_rate_pct=0.04,
+            owner_draw_uzs=Decimal(random.randint(3_000_000, 12_000_000)),
+            seasonality_profile={
+                str(month): round(
+                    1.10
+                    if (month + seasonality_shift) % 12 in (3, 4, 10, 11)
+                    else 0.94
+                    if month in (1, 2)
+                    else 1.0,
+                    2,
+                )
+                for month in range(1, 13)
+            },
+            risk_assumptions={
+                "rent_increase_probability": 0.18,
+                "supplier_cost_shock_probability": 0.12,
+                "competitor_entry_probability": 0.25,
+                "monthly_revenue_std_pct": round(profile["volatility"], 3),
+            },
+            created_by="seed_db.py",
+        )
+        session.add(assumption)
+        await session.flush()
+        assumptions.append(assumption)
+
+        cumulative_cash = Decimal(initial_capital - startup_capex)
+        cumulative_p10 = cumulative_cash
+        cumulative_p90 = cumulative_cash
+        break_even_month = None
+        worst_month_cash = cumulative_cash
+
+        monthly_rows: list[ViabilityCashflowMonth] = []
+        for month_idx in range(1, 25):
+            month_date = add_months(date(2026, 4, 1), month_idx - 1)
+            seasonality = Decimal(
+                str(assumption.seasonality_profile[str(month_date.month)])
+            )
+            growth = Decimal(str((1 + profile["growth"]) ** (month_idx - 1)))
+            expected_revenue = Decimal(base_revenue) * growth * seasonality
+            p10_revenue = expected_revenue * Decimal("0.78")
+            p90_revenue = expected_revenue * Decimal("1.24")
+            variable_cost_uzs = expected_revenue * Decimal(str(variable_cost))
+            tax_base = max(Decimal(0), expected_revenue - variable_cost_uzs)
+            tax = tax_base * Decimal(str(assumption.tax_rate_pct))
+            net_cashflow = (
+                expected_revenue
+                - variable_cost_uzs
+                - Decimal(fixed_cost)
+                - Decimal(loan_payment)
+                - tax
+                - assumption.owner_draw_uzs
+            )
+            cumulative_cash += net_cashflow
+            cumulative_p10 += net_cashflow - (expected_revenue * Decimal("0.18"))
+            cumulative_p90 += net_cashflow + (expected_revenue * Decimal("0.18"))
+            worst_month_cash = min(worst_month_cash, cumulative_p10)
+            if break_even_month is None and cumulative_cash >= Decimal(0):
+                break_even_month = month_idx
+
+            monthly_rows.append(
+                ViabilityCashflowMonth(
+                    run_id=0,
+                    month_index=month_idx,
+                    expected_revenue_uzs=expected_revenue.quantize(Decimal("0.01")),
+                    p10_revenue_uzs=p10_revenue.quantize(Decimal("0.01")),
+                    p90_revenue_uzs=p90_revenue.quantize(Decimal("0.01")),
+                    variable_cost_uzs=variable_cost_uzs.quantize(Decimal("0.01")),
+                    fixed_cost_uzs=Decimal(fixed_cost),
+                    loan_payment_uzs=Decimal(loan_payment),
+                    tax_uzs=tax.quantize(Decimal("0.01")),
+                    net_cashflow_uzs=net_cashflow.quantize(Decimal("0.01")),
+                    cumulative_cash_p10_uzs=cumulative_p10.quantize(Decimal("0.01")),
+                    cumulative_cash_p50_uzs=cumulative_cash.quantize(Decimal("0.01")),
+                    cumulative_cash_p90_uzs=cumulative_p90.quantize(Decimal("0.01")),
+                    probability_negative_cash=round(
+                        min(0.95, max(0.05, 0.15 + month_idx * 0.015)),
+                        3,
+                    ),
+                    is_break_even_month=False,
+                )
+            )
+
+        runway_months = 24.0 if worst_month_cash >= 0 else random.uniform(6.0, 18.0)
+        survival_probability = max(
+            0.05,
+            min(0.97, 1 - profile["failure"] + random.uniform(-0.10, 0.12)),
+        )
+        viability_score = round(survival_probability * 100, 1)
+        recommendation = (
+            "approve"
+            if viability_score >= 72
+            else "review"
+            if viability_score >= 52
+            else "reject"
+        )
+        min_required_capital = max(
+            Decimal(0),
+            abs(worst_month_cash) + Decimal(fixed_cost * 2),
+        )
+
+        run = ViabilityCheckRun(
+            assumption_id=assumption.id,
+            mcc_code=category.mcc_code,
+            niche=category.niche_name_uz,
+            city=CITY,
+            simulation_months=24,
+            monte_carlo_iterations=2000,
+            random_seed=SEED + idx,
+            break_even_month=break_even_month,
+            runway_months=round(runway_months, 1),
+            survival_probability_24m=round(survival_probability, 3),
+            cash_out_probability_24m=round(1 - survival_probability, 3),
+            probability_break_even_24m=round(
+                0.85 if break_even_month is not None else 0.35,
+                3,
+            ),
+            median_final_cash_uzs=cumulative_cash.quantize(Decimal("0.01")),
+            p10_final_cash_uzs=cumulative_p10.quantize(Decimal("0.01")),
+            p90_final_cash_uzs=cumulative_p90.quantize(Decimal("0.01")),
+            worst_month_cash_uzs=worst_month_cash.quantize(Decimal("0.01")),
+            min_required_capital_uzs=min_required_capital.quantize(Decimal("0.01")),
+            viability_score=viability_score,
+            recommendation=recommendation,
+            confidence_score=round(random.uniform(0.72, 0.91), 2),
+            analysis_summary=(
+                f"{category.niche_name_uz} uchun 24 oylik fake Monte Carlo "
+                "viability natijasi: break-even, runway va survival probability."
+            ),
+            calc_metadata={
+                "source": "seed_db.py",
+                "method": "financial_model_monte_carlo_mock",
+                "is_fake_data": True,
+                "iterations": 2000,
+            },
+        )
+        session.add(run)
+        await session.flush()
+        runs.append(run)
+
+        for row in monthly_rows:
+            row.run_id = run.id
+            row.is_break_even_month = row.month_index == break_even_month
+        cashflow_months.extend(monthly_rows)
+
+    session.add_all(cashflow_months)
+    await session.flush()
+    print(
+        f"    {len(benchmarks)} ta benchmark, "
+        f"{len(assumptions)} ta assumption, "
+        f"{len(runs)} ta run, "
+        f"{len(cashflow_months)} ta cashflow oy qo'shildi"
+    )
+
+
 async def clear_tables(session: AsyncSession) -> None:
     print("  Jadvallar tozalanmoqda...")
     # Foreign key tartibiga rioya qilib o'chirish
     for table in [
+        "viability_cashflow_months",
+        "viability_check_runs",
+        "viability_plan_assumptions",
+        "sector_financial_benchmarks",
         "demand_forecast_points",
         "demand_forecast_runs",
         "niche_monthly_revenues",
@@ -596,7 +935,11 @@ async def has_existing_data(session: AsyncSession) -> bool:
     return result.scalar() is not None
 
 
-async def main(clear: bool = False, forecast_only: bool = False) -> None:
+async def main(
+    clear: bool = False,
+    forecast_only: bool = False,
+    viability_only: bool = False,
+) -> None:
     print(f"\n=== Fake data seed ({CITY}) ===\n")
 
     engine = create_async_engine(settings.database_url, echo=False)
@@ -604,6 +947,19 @@ async def main(clear: bool = False, forecast_only: bool = False) -> None:
 
     async with Session() as session:
         async with session.begin():
+            if viability_only:
+                stmt = select(MCCCategory).order_by(MCCCategory.id)
+                result = await session.execute(stmt)
+                categories = list(result.scalars().all())
+                if not categories:
+                    print(
+                        "XATO: MCC kategoriyalar topilmadi. "
+                        "Avval umumiy seedni ishga tushiring."
+                    )
+                    return
+                await seed_viability_check(session, categories)
+                return
+
             if forecast_only:
                 stmt = select(MCCCategory).order_by(MCCCategory.id)
                 result = await session.execute(stmt)
@@ -643,6 +999,7 @@ async def main(clear: bool = False, forecast_only: bool = False) -> None:
             await seed_customer_segments(session)
             await seed_market_size_estimates(session, mcc_data_clean)
             await seed_demand_forecasting(session, categories)
+            await seed_viability_check(session, categories)
 
     await engine.dispose()
     print("\n=== Seed muvaffaqiyatli yakunlandi! ===\n")
@@ -660,5 +1017,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Faqat M-B1 demand forecasting fake data jadvallarini to'ldirish",
     )
+    parser.add_argument(
+        "--viability-only",
+        action="store_true",
+        help="Faqat M-D1 viability check fake data jadvallarini to'ldirish",
+    )
     args = parser.parse_args()
-    asyncio.run(main(clear=args.clear, forecast_only=args.forecast_only))
+    asyncio.run(
+        main(
+            clear=args.clear,
+            forecast_only=args.forecast_only,
+            viability_only=args.viability_only,
+        )
+    )
