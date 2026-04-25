@@ -48,6 +48,12 @@ async def demand_forecast(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    except ValueError as exc:
+        logger.error("Demand forecast validatsiya xatosi: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Kutilmagan xato")
         raise HTTPException(

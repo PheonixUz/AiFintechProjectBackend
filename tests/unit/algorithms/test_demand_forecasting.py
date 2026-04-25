@@ -53,6 +53,11 @@ def test_invalid_horizon_raises():
         run_demand_forecast(DemandForecastInput(history=_history(), horizon_months=18))
 
 
+def test_short_history_raises():
+    with pytest.raises(ValueError):
+        run_demand_forecast(DemandForecastInput(history=_history(12), horizon_months=12))
+
+
 def test_empty_history_raises():
     with pytest.raises(ValueError):
         run_demand_forecast(DemandForecastInput(history=[], horizon_months=12))
