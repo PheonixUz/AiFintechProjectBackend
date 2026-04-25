@@ -123,8 +123,8 @@ async def seed_transactions(session: AsyncSession, mcc_codes: list[str], count: 
     print(f"  Transaction yozilmoqda ({count} ta)...")
     age_groups = ["18-25", "26-35", "36-50", "50+"]
     genders = ["M", "F"]
-    end_date = date(2024, 12, 31)
-    start_date = date(2023, 1, 1)
+    end_date = date(2026, 4, 25)
+    start_date = date(2024, 1, 1)
 
     transactions = []
     for _ in range(count):
@@ -166,22 +166,21 @@ async def seed_transactions(session: AsyncSession, mcc_codes: list[str], count: 
 async def seed_businesses(session: AsyncSession, mcc_data: list[tuple]) -> None:
     print("  Business yozilmoqda...")
     businesses = []
-    today = date(2024, 12, 31)
+    today = date(2026, 4, 25)
 
     for district_name, dlat, dlon in DISTRICTS:
         for mcc_code, _, niche_uz, _, _ in mcc_data[:10]:  # har tumanda 10 nisha
             count = random.randint(2, 8)
             for i in range(count):
                 lat, lon = rand_coord_near(dlat, dlon, 2.0)
-                opened = rand_date(date(2018, 1, 1), date(2023, 6, 1))
+                opened = rand_date(date(2018, 1, 1), date(2025, 12, 1))
 
-                is_active = random.random() > 0.25
+                earliest_close = opened + timedelta(days=180)
+                can_be_closed = earliest_close < today
+                is_active = not can_be_closed or random.random() > 0.25
                 closed_date = None
                 if not is_active:
-                    closed_date = rand_date(
-                        opened + timedelta(days=180),
-                        today,
-                    )
+                    closed_date = rand_date(earliest_close, today)
 
                 b = Business(
                     name=f"{niche_uz} #{i + 1} ({district_name})",
@@ -240,7 +239,7 @@ async def seed_market_benchmarks(session: AsyncSession, mcc_data: list[tuple]) -
             avg_employee_count=round(random.uniform(2.0, 12.0), 1),
             revenue_per_sqm_monthly_uzs=Decimal(random.randint(200_000, 800_000)),
             annual_growth_rate_pct=round(random.uniform(-0.05, 0.20), 3),
-            data_year=2024,
+            data_year=2026,
             data_source="bank_transactions",
         )
         benchmarks.append(bm)
@@ -271,7 +270,7 @@ async def seed_population_zones(session: AsyncSession) -> None:
                 youth_population=int(pop * random.uniform(0.25, 0.35)),
                 avg_monthly_income_uzs=Decimal(avg_income),
                 avg_monthly_spending_uzs=Decimal(int(avg_income * random.uniform(0.60, 0.75))),
-                data_year=2024,
+                data_year=2026,
             )
             zones.append(z)
 
@@ -348,7 +347,7 @@ async def seed_customer_segments(session: AsyncSession) -> None:
                     for mcc in random.sample(top_mcc, 3)
                 },
                 estimated_count=random.randint(1_000, 15_000),
-                data_year=2024,
+                data_year=2026,
             )
             segments.append(s)
 
@@ -360,7 +359,7 @@ async def seed_customer_segments(session: AsyncSession) -> None:
 async def seed_market_size_estimates(session: AsyncSession, mcc_data: list[tuple]) -> None:
     print("  MarketSizeEstimate yozilmoqda...")
     estimates = []
-    calc_date = date(2024, 12, 1)
+    calc_date = date(2026, 4, 1)
 
     for district_name, dlat, dlon in DISTRICTS[:6]:  # 6 tumanда
         for mcc_code, _, niche_uz, _, _ in mcc_data[:8]:

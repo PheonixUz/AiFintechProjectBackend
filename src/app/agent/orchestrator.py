@@ -63,32 +63,6 @@ def _build_algorithm_input(
     )
 
 
-def _cached_to_result(
-    cached: dict, bm: dict, market_data: dict
-) -> "MarketSizingResult":
-    """Kesh ma'lumotlaridan MarketSizingResult yasaydi (synthesis uchun)."""
-    tam = Decimal(cached["tam_uzs"])
-    sam = Decimal(cached["sam_uzs"])
-    som = Decimal(cached["som_uzs"])
-    return MarketSizingResult(
-        tam_uzs=tam,
-        sam_uzs=sam,
-        som_uzs=som,
-        tam_low_uzs=tam * Decimal("0.70"),
-        tam_high_uzs=tam * Decimal("1.30"),
-        sam_low_uzs=sam * Decimal("0.70"),
-        sam_high_uzs=sam * Decimal("1.30"),
-        som_low_uzs=som * Decimal("0.70"),
-        som_high_uzs=som * Decimal("1.30"),
-        market_share_pct=round(100 / (market_data["competitor_count_radius"] + 1), 2),
-        market_growth_rate_pct=bm["annual_growth_rate_pct"],
-        gross_margin_pct=bm["gross_margin_pct"],
-        competitor_count_radius=market_data["competitor_count_radius"],
-        confidence_score=cached["confidence_score"],
-        data_weight=1.0,
-        methodology_notes={"source": "cache", "date": cached["calculation_date"]},
-    )
-
 
 def _build_synthesis_prompt(
     req: MarketSizingRequest, result: MarketSizingResult
@@ -141,53 +115,7 @@ class MarketSizingAgent:
             google_api_key=settings.google_api_key,
         )
 
-        # 2. Keshdan qaytarish
-        if market_data.get("cached_estimate"):
-            cached = market_data["cached_estimate"]
-            bm = market_data.get("benchmark") or _DEFAULT_BENCHMARK
-            synthesis = await llm.ainvoke(
-                [
-                    SystemMessage(content=MARKET_SIZING_SYSTEM),
-                    HumanMessage(
-                        content=_build_synthesis_prompt(
-                            req,
-                            _cached_to_result(cached, bm, market_data),
-                        )
-                    ),
-                ]
-            )
-            analysis_text = (
-                synthesis.content if isinstance(synthesis.content, str) else ""
-            )
-            return MarketSizingResponse(
-                niche=req.niche,
-                city=req.city,
-                tam_uzs=Decimal(cached["tam_uzs"]),
-                sam_uzs=Decimal(cached["sam_uzs"]),
-                som_uzs=Decimal(cached["som_uzs"]),
-                tam_low_uzs=Decimal(cached["tam_uzs"]) * Decimal("0.70"),
-                tam_high_uzs=Decimal(cached["tam_uzs"]) * Decimal("1.30"),
-                sam_low_uzs=Decimal(cached["sam_uzs"]) * Decimal("0.70"),
-                sam_high_uzs=Decimal(cached["sam_uzs"]) * Decimal("1.30"),
-                som_low_uzs=Decimal(cached["som_uzs"]) * Decimal("0.70"),
-                som_high_uzs=Decimal(cached["som_uzs"]) * Decimal("1.30"),
-                market_share_pct=round(
-                    100 / (market_data["competitor_count_radius"] + 1), 2
-                ),
-                market_growth_rate_pct=bm["annual_growth_rate_pct"],
-                gross_margin_pct=bm["gross_margin_pct"],
-                competitor_count_radius=market_data["competitor_count_radius"],
-                confidence_score=cached["confidence_score"],
-                data_weight=1.0,
-                methodology_notes={
-                    "source": "cache",
-                    "date": cached["calculation_date"],
-                },
-                analysis_summary=analysis_text,
-                from_cache=True,
-            )
-
-        # 3. Algorithm hisoblash
+        # 2. Algorithm hisoblash
         algo_input = _build_algorithm_input(market_data)
         algo_result = run_market_sizing(algo_input)
 

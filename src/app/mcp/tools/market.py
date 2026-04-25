@@ -4,7 +4,6 @@ M-A1 Market Sizing uchun DB ma'lumot olish funksiyasi.
 Faqat shu fayl DB ga murojaat qiladi — algorithm funksiyalari emas.
 """
 
-from datetime import date
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +45,6 @@ async def execute_get_market_data(
     )
 
     benchmark = await repo.get_benchmarks(mcc_code, city)
-    cached = await repo.get_cached_estimate(niche, lat, lon, radius_m, date.today())
 
     result: dict = {
         "tam_transactions_uzs": str(tam),
@@ -54,18 +52,8 @@ async def execute_get_market_data(
         "transaction_sample_size": transaction_sample_size,
         "competitor_count_radius": competitor_count_radius,
         "competitor_count_city": competitor_count_city,
-        "cached_estimate": None,
         "benchmark": None,
     }
-
-    if cached:
-        result["cached_estimate"] = {
-            "tam_uzs": str(cached.tam_uzs),
-            "sam_uzs": str(cached.sam_uzs),
-            "som_uzs": str(cached.som_uzs),
-            "confidence_score": cached.confidence_score,
-            "calculation_date": cached.calculation_date.isoformat(),
-        }
 
     if benchmark:
         result["benchmark"] = {
