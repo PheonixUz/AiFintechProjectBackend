@@ -22,6 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 from app.db.models.business import Business
 from app.db.models.customer import CustomerSegment
+from app.db.models.forecast import (
+    DemandForecastPoint,
+    DemandForecastRun,
+    NicheMonthlyRevenue,
+)
 from app.db.models.location import PointOfInterest, PopulationZone
 from app.db.models.market import MarketBenchmark, MarketSizeEstimate
 from app.db.models.transaction import MCCCategory, Transaction
@@ -84,6 +89,12 @@ def rand_coord_near(lat: float, lon: float, radius_km: float = 2.0) -> tuple[flo
 def rand_date(start: date, end: date) -> date:
     delta = (end - start).days
     return start + timedelta(days=random.randint(0, delta))
+
+
+def add_months(month: date, count: int) -> date:
+    total_month = month.month - 1 + count
+    year = month.year + total_month // 12
+    return date(year, total_month % 12 + 1, 1)
 
 
 def uzs(amount: int, variation: float = 0.3) -> Decimal:
@@ -396,10 +407,139 @@ async def seed_market_size_estimates(session: AsyncSession, mcc_data: list[tuple
 
 # ─── Asosiy funksiya ──────────────────────────────────────────────────────────
 
+async def seed_demand_forecasting(
+    session: AsyncSession, categories: list[MCCCategory]
+) -> None:
+    print("  M-B1 Demand Forecasting ma'lumotlari yozilmoqda...")
+
+    existing = await session.execute(select(DemandForecastRun).limit(1))
+    if existing.scalar() is not None:
+        print("    Forecast ma'lumotlari mavjud, o'tkazib yuborildi")
+        return
+
+    monthly_rows: list[NicheMonthlyRevenue] = []
+    forecast_runs: list[DemandForecastRun] = []
+    forecast_points: list[DemandForecastPoint] = []
+
+    history_start = date(2023, 10, 1)
+    history_months = 30
+    forecast_start = date(2026, 4, 1)
+
+    for idx, category in enumerate(categories[:10]):
+        base_revenue = 350_000_000 + idx * 45_000_000
+        monthly_growth = random.uniform(0.006, 0.025)
+        seasonality_shift = random.randint(0, 11)
+        latest_revenue = Decimal(0)
+
+        for month_idx in range(history_months):
+            month = add_months(history_start, month_idx)
+            is_high_season = (month.month + seasonality_shift) % 12 in (3, 4, 10, 11)
+            seasonal = 1.12 if is_high_season else 0.97
+            trend = (1 + monthly_growth) ** month_idx
+            revenue = Decimal(
+                str(
+                    round(
+                        base_revenue * trend * seasonal * random.uniform(0.88, 1.12),
+                        2,
+                    )
+                )
+            )
+            tx_count = random.randint(1200, 8500)
+            latest_revenue = revenue
+            monthly_rows.append(
+                NicheMonthlyRevenue(
+                    mcc_code=category.mcc_code,
+                    niche=category.niche_name_uz,
+                    city=CITY,
+                    month=month,
+                    revenue_uzs=revenue,
+                    transaction_count=tx_count,
+                    avg_check_uzs=Decimal(str(round(float(revenue) / tx_count, 2))),
+                    active_business_count=random.randint(25, 180),
+                    source="synthetic_bank_transactions",
+                )
+            )
+
+        for horizon in (12, 24, 36):
+            run = DemandForecastRun(
+                niche=category.niche_name_uz,
+                mcc_code=category.mcc_code,
+                city=CITY,
+                horizon_months=horizon,
+                history_start_date=history_start,
+                history_end_date=add_months(history_start, history_months - 1),
+                forecast_start_month=forecast_start,
+                model_name="lstm_prophet_ensemble",
+                model_version="fake-v1",
+                algorithm="LSTM + Facebook Prophet",
+                confidence_level=0.95,
+                training_sample_size=history_months,
+                train_mape_pct=round(random.uniform(4.5, 13.5), 2),
+                train_rmse_uzs=Decimal(str(random.randint(18_000_000, 95_000_000))),
+                status="completed",
+                analysis_summary=(
+                    f"{category.niche_name_uz} nishasi uchun {horizon} oylik "
+                    "fake forecast: trend, mavsumiylik va ishonch intervali."
+                ),
+                calc_metadata={
+                    "source": "seed_db.py",
+                    "model_components": ["lstm", "prophet"],
+                    "seasonality": "monthly",
+                    "is_fake_data": True,
+                },
+            )
+            session.add(run)
+            await session.flush()
+            forecast_runs.append(run)
+
+            for h in range(1, horizon + 1):
+                forecast_month = add_months(forecast_start, h - 1)
+                is_high_season = (
+                    (forecast_month.month + seasonality_shift) % 12 in (3, 4, 10, 11)
+                )
+                seasonal_factor = Decimal("1.10") if is_high_season else Decimal("0.97")
+                growth_factor = Decimal(str((1 + monthly_growth) ** h))
+                trend_component = latest_revenue * growth_factor
+                prediction = trend_component * seasonal_factor
+                widening = Decimal("0.12") + Decimal(str(h)) * Decimal("0.008")
+                lower = prediction * (Decimal("1") - widening)
+                upper = prediction * (Decimal("1") + widening)
+
+                forecast_points.append(
+                    DemandForecastPoint(
+                        forecast_run_id=run.id,
+                        forecast_month=forecast_month,
+                        horizon_index=h,
+                        predicted_revenue_uzs=prediction.quantize(Decimal("0.01")),
+                        lower_revenue_uzs=max(Decimal(0), lower).quantize(
+                            Decimal("0.01")
+                        ),
+                        upper_revenue_uzs=upper.quantize(Decimal("0.01")),
+                        trend_component_uzs=trend_component.quantize(Decimal("0.01")),
+                        seasonal_component_uzs=(prediction - trend_component).quantize(
+                            Decimal("0.01")
+                        ),
+                        confidence_level=0.95,
+                    )
+                )
+
+    session.add_all(monthly_rows)
+    session.add_all(forecast_points)
+    await session.flush()
+    print(
+        f"    {len(monthly_rows)} ta monthly revenue, "
+        f"{len(forecast_runs)} ta forecast run, "
+        f"{len(forecast_points)} ta forecast point qo'shildi"
+    )
+
+
 async def clear_tables(session: AsyncSession) -> None:
     print("  Jadvallar tozalanmoqda...")
     # Foreign key tartibiga rioya qilib o'chirish
     for table in [
+        "demand_forecast_points",
+        "demand_forecast_runs",
+        "niche_monthly_revenues",
         "market_size_estimates",
         "market_benchmarks",
         "customer_segments",
@@ -418,7 +558,7 @@ async def has_existing_data(session: AsyncSession) -> bool:
     return result.scalar() is not None
 
 
-async def main(clear: bool = False) -> None:
+async def main(clear: bool = False, forecast_only: bool = False) -> None:
     print(f"\n=== Fake data seed ({CITY}) ===\n")
 
     engine = create_async_engine(settings.database_url, echo=False)
@@ -426,6 +566,19 @@ async def main(clear: bool = False) -> None:
 
     async with Session() as session:
         async with session.begin():
+            if forecast_only:
+                stmt = select(MCCCategory).order_by(MCCCategory.id)
+                result = await session.execute(stmt)
+                categories = list(result.scalars().all())
+                if not categories:
+                    print(
+                        "XATO: MCC kategoriyalar topilmadi. "
+                        "Avval umumiy seedni ishga tushiring."
+                    )
+                    return
+                await seed_demand_forecasting(session, categories)
+                return
+
             if not clear and await has_existing_data(session):
                 print(
                     "XATO: Databazada allaqachon ma'lumotlar mavjud.\n"
@@ -451,6 +604,7 @@ async def main(clear: bool = False) -> None:
             await seed_poi(session)
             await seed_customer_segments(session)
             await seed_market_size_estimates(session, mcc_data_clean)
+            await seed_demand_forecasting(session, categories)
 
     await engine.dispose()
     print("\n=== Seed muvaffaqiyatli yakunlandi! ===\n")
@@ -463,5 +617,10 @@ if __name__ == "__main__":
         action="store_true",
         help="Seed qilishdan oldin barcha jadvallarni tozalash",
     )
+    parser.add_argument(
+        "--forecast-only",
+        action="store_true",
+        help="Faqat M-B1 demand forecasting fake data jadvallarini to'ldirish",
+    )
     args = parser.parse_args()
-    asyncio.run(main(clear=args.clear))
+    asyncio.run(main(clear=args.clear, forecast_only=args.forecast_only))
