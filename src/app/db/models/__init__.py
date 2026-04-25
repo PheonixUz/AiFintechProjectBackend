@@ -1,6 +1,12 @@
 from app.db.models.base import Base, TimestampMixin
 from app.db.models.business import Business
 from app.db.models.customer import CustomerSegment
+from app.db.models.financial import (
+    SectorFinancialBenchmark,
+    ViabilityCashflowMonth,
+    ViabilityCheckRun,
+    ViabilityPlanAssumption,
+)
 from app.db.models.forecast import (
     DemandForecastPoint,
     DemandForecastRun,
@@ -24,4 +30,8 @@ __all__ = [
     "NicheMonthlyRevenue",
     "DemandForecastRun",
     "DemandForecastPoint",
+    "SectorFinancialBenchmark",
+    "ViabilityPlanAssumption",
+    "ViabilityCheckRun",
+    "ViabilityCashflowMonth",
 ]
