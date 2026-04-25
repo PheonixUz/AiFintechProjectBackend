@@ -1,10 +1,10 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel
 
 # ── MCC Kategoriyalar ──────────────────────────────────────────────────────────
+
 
 class MCCCategoryOut(BaseModel):
     mcc_code: str
@@ -18,6 +18,7 @@ class MCCCategoryOut(BaseModel):
 
 
 # ── Benchmarklar ───────────────────────────────────────────────────────────────
+
 
 class BenchmarkOut(BaseModel):
     mcc_code: str
@@ -41,6 +42,7 @@ class BenchmarkOut(BaseModel):
 
 # ── Raqobatchilar ──────────────────────────────────────────────────────────────
 
+
 class CompetitorOut(BaseModel):
     id: int
     name: str | None
@@ -59,7 +61,7 @@ class CompetitorOut(BaseModel):
 
 
 class CompetitorListOut(BaseModel):
-    niche: str
+    mcc_code: str
     lat: float
     lon: float
     radius_m: float
@@ -68,6 +70,7 @@ class CompetitorListOut(BaseModel):
 
 
 # ── Tranzaksiya statistikasi ───────────────────────────────────────────────────
+
 
 class TransactionMonthOut(BaseModel):
     month: int
@@ -85,6 +88,7 @@ class TransactionSummaryOut(BaseModel):
 
 
 # ── Aholi zonalari ─────────────────────────────────────────────────────────────
+
 
 class PopulationZoneOut(BaseModel):
     id: int
@@ -115,6 +119,7 @@ class PopulationListOut(BaseModel):
 
 # ── POI (Qiziqish nuqtalari) ───────────────────────────────────────────────────
 
+
 class POIOut(BaseModel):
     id: int
     name: str
@@ -141,6 +146,7 @@ class POIListOut(BaseModel):
 
 
 # ── Mijoz segmentlari ──────────────────────────────────────────────────────────
+
 
 class CustomerSegmentOut(BaseModel):
     id: int
@@ -171,6 +177,7 @@ class CustomerSegmentListOut(BaseModel):
 
 
 # ── Saqlangan bozor tahminlari ─────────────────────────────────────────────────
+
 
 class MarketEstimateOut(BaseModel):
     id: int

@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 
 class MarketSizingRequest(BaseModel):
-    niche: str = Field(..., description="Biznes nishasi (masalan: 'restoran')")
     mcc_code: str = Field(
         ..., min_length=4, max_length=4, description="MCC kod (4 raqam)"
     )

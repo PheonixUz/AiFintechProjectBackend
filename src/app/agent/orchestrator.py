@@ -63,7 +63,6 @@ def _build_algorithm_input(
     )
 
 
-
 def _build_synthesis_prompt(
     req: MarketSizingRequest, result: MarketSizingResult
 ) -> str:
@@ -76,7 +75,7 @@ def _build_synthesis_prompt(
     capital_m = f"{float(req.capital_uzs) / 1_000_000:.1f} mln UZS"
 
     return (
-        f"Hisoblash tugadi. {req.niche} biznesini "
+        f"Hisoblash tugadi. MCC {req.mcc_code} biznesini "
         f"{req.city} shahridagi lokatsiya uchun baholang:\n\n"
         f"  TAM: {m(result.tam_uzs)} ({tam_range})\n"
         f"  SAM: {m(result.sam_uzs)} ({sam_range})\n"
@@ -101,7 +100,6 @@ class MarketSizingAgent:
         market_data = await execute_get_market_data(
             self._session,
             mcc_code=req.mcc_code,
-            niche=req.niche,
             lat=req.lat,
             lon=req.lon,
             radius_m=req.radius_m,
@@ -129,7 +127,7 @@ class MarketSizingAgent:
         analysis_text = synthesis.content if isinstance(synthesis.content, str) else ""
 
         return MarketSizingResponse(
-            niche=req.niche,
+            mcc_code=req.mcc_code,
             city=req.city,
             tam_uzs=algo_result.tam_uzs,
             sam_uzs=algo_result.sam_uzs,

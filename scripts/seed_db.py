@@ -55,14 +55,38 @@ DISTRICTS = [
 
 MCC_DATA = [
     # (mcc_code, category_name_en, niche_name_uz, niche_name_ru, parent_category)
-    ("5411", "Grocery Stores", "Oziq-ovqat do'koni", "Продуктовый магазин", "Oziq-ovqat"),
+    (
+        "5411",
+        "Grocery Stores",
+        "Oziq-ovqat do'koni",
+        "Продуктовый магазин",
+        "Oziq-ovqat",
+    ),
     ("5812", "Eating Places, Restaurants", "Restoran", "Ресторан", "Oziq-ovqat"),
     ("5814", "Fast Food Restaurants", "Tez ovqat", "Фаст-фуд", "Oziq-ovqat"),
     ("5912", "Drug Stores and Pharmacies", "Dorixona", "Аптека", "Sog'liqni saqlash"),
     ("7011", "Hotels and Motels", "Mehmonxona", "Гостиница", "Xizmatlar"),
-    ("5621", "Women's Ready-To-Wear Stores", "Ayollar kiyimi", "Женская одежда", "Kiyim-kechak"),
-    ("5611", "Men's Clothing Stores", "Erkaklar kiyimi", "Мужская одежда", "Kiyim-kechak"),
-    ("5945", "Hobby, Toy, and Game Shops", "O'yinchoq do'koni", "Игрушки", "Ko'ngilochar"),
+    (
+        "5621",
+        "Women's Ready-To-Wear Stores",
+        "Ayollar kiyimi",
+        "Женская одежда",
+        "Kiyim-kechak",
+    ),
+    (
+        "5611",
+        "Men's Clothing Stores",
+        "Erkaklar kiyimi",
+        "Мужская одежда",
+        "Kiyim-kechak",
+    ),
+    (
+        "5945",
+        "Hobby, Toy, and Game Shops",
+        "O'yinchoq do'koni",
+        "Игрушки",
+        "Ko'ngilochar",
+    ),
     ("7230", "Beauty Shops", "Go'zallik saloni", "Салон красоты", "Xizmatlar"),
     ("7011", "Fitness Centers", "Sport zali", "Фитнес-зал", "Sport"),
     ("5251", "Hardware Stores", "Qurilish mollari", "Стройматериалы", "Qurilish"),
@@ -75,7 +99,10 @@ MCC_DATA = [
 
 # ─── Yordamchi funksiyalar ────────────────────────────────────────────────────
 
-def rand_coord_near(lat: float, lon: float, radius_km: float = 2.0) -> tuple[float, float]:
+
+def rand_coord_near(
+    lat: float, lon: float, radius_km: float = 2.0
+) -> tuple[float, float]:
     dlat = random.uniform(-radius_km / 111, radius_km / 111)
     dlon = random.uniform(-radius_km / 85, radius_km / 85)
     return round(lat + dlat, 6), round(lon + dlon, 6)
@@ -92,6 +119,7 @@ def uzs(amount: int, variation: float = 0.3) -> Decimal:
 
 
 # ─── Seed funksiyalari ────────────────────────────────────────────────────────
+
 
 async def seed_mcc_categories(session: AsyncSession) -> list[MCCCategory]:
     print("  MCCCategory yozilmoqda...")
@@ -119,7 +147,9 @@ async def seed_mcc_categories(session: AsyncSession) -> list[MCCCategory]:
     return categories
 
 
-async def seed_transactions(session: AsyncSession, mcc_codes: list[str], count: int = 5000) -> None:
+async def seed_transactions(
+    session: AsyncSession, mcc_codes: list[str], count: int = 5000
+) -> None:
     print(f"  Transaction yozilmoqda ({count} ta)...")
     age_groups = ["18-25", "26-35", "36-50", "50+"]
     genders = ["M", "F"]
@@ -269,7 +299,9 @@ async def seed_population_zones(session: AsyncSession) -> None:
                 working_age_population=int(pop * random.uniform(0.55, 0.65)),
                 youth_population=int(pop * random.uniform(0.25, 0.35)),
                 avg_monthly_income_uzs=Decimal(avg_income),
-                avg_monthly_spending_uzs=Decimal(int(avg_income * random.uniform(0.60, 0.75))),
+                avg_monthly_spending_uzs=Decimal(
+                    int(avg_income * random.uniform(0.60, 0.75))
+                ),
                 data_year=2026,
             )
             zones.append(z)
@@ -295,7 +327,11 @@ async def seed_poi(session: AsyncSession) -> None:
     pois = []
     for district_name, dlat, dlon in DISTRICTS:
         for poi_type, base_name, cap_min, cap_max in poi_templates:
-            count = random.randint(1, 4) if poi_type in ("mosque", "school", "transport_hub") else 1
+            count = (
+                random.randint(1, 4)
+                if poi_type in ("mosque", "school", "transport_hub")
+                else 1
+            )
             for k in range(count):
                 lat, lon = rand_coord_near(dlat, dlon, 2.5)
                 capacity = random.randint(cap_min, cap_max)
@@ -356,7 +392,9 @@ async def seed_customer_segments(session: AsyncSession) -> None:
     print(f"    {len(segments)} ta segment qo'shildi")
 
 
-async def seed_market_size_estimates(session: AsyncSession, mcc_data: list[tuple]) -> None:
+async def seed_market_size_estimates(
+    session: AsyncSession, mcc_data: list[tuple]
+) -> None:
     print("  MarketSizeEstimate yozilmoqda...")
     estimates = []
     calc_date = date(2026, 4, 1)
@@ -395,6 +433,7 @@ async def seed_market_size_estimates(session: AsyncSession, mcc_data: list[tuple
 
 
 # ─── Asosiy funksiya ──────────────────────────────────────────────────────────
+
 
 async def clear_tables(session: AsyncSession) -> None:
     print("  Jadvallar tozalanmoqda...")

@@ -9,11 +9,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Float,
     Index,
     Integer,
-    JSON,
     Numeric,
     String,
     func,
@@ -46,14 +46,18 @@ class CustomerSegment(Base):
     radius_m: Mapped[float] = mapped_column(Float, nullable=False, default=500.0)
 
     # Xarid profili
-    avg_monthly_spending_uzs: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    avg_monthly_spending_uzs: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False
+    )
     purchase_frequency_monthly: Mapped[float] = mapped_column(Float, nullable=False)
     avg_check_uzs: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
 
     # Top MCC kategoriyalar (JSON array of mcc_codes)
     top_mcc_categories: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # Spending taqsimoti kategoriyalar bo'yicha (JSON: {mcc_code: pct})
-    spending_distribution: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    spending_distribution: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
 
     # Segment hajmi
     estimated_count: Mapped[int] = mapped_column(Integer, nullable=False)

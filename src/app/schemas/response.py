@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class MarketSizingResponse(BaseModel):
-    niche: str
+    mcc_code: str
     city: str
 
     # Asosiy natijalar (yillik, UZS)

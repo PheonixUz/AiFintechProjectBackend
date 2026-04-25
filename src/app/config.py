@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/fintech_db"
+    database_url: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/fintech_db"
+    )
     db_pool_size: int = 10
     db_max_overflow: int = 20
     db_pool_timeout: int = 30

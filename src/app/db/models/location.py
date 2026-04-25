@@ -44,13 +44,19 @@ class PopulationZone(Base):
 
     # Demografiya
     total_population: Mapped[int] = mapped_column(Integer, nullable=False)
-    working_age_population: Mapped[int] = mapped_column(Integer, nullable=False)  # 18–65
+    working_age_population: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # 18–65
     youth_population: Mapped[int] = mapped_column(Integer, nullable=False)  # 18–35
 
     # Iqtisodiy ko'rsatkichlar
-    avg_monthly_income_uzs: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    avg_monthly_income_uzs: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False
+    )
     # O'rtacha oylik iste'mol xarajatlari (daromadning ~70%)
-    avg_monthly_spending_uzs: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    avg_monthly_spending_uzs: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False
+    )
 
     data_year: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

@@ -1,14 +1,13 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from app.config import settings
-from app.db.models.base import Base
 
 # Barcha modellarni import qilish — autogenerate aniqlashi uchun
 import app.db.models  # noqa: F401
+from alembic import context
+from app.config import settings
+from app.db.models.base import Base
 
 config = context.config
 

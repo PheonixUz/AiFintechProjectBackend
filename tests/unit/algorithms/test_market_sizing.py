@@ -6,8 +6,6 @@ Faqat sof matematik mantiqni tekshiradi — DB yo'q, agent yo'q.
 
 from decimal import Decimal
 
-import pytest
-
 from app.algorithms.market_sizing import (
     MarketSizingInput,
     _data_confidence,
@@ -18,10 +16,10 @@ from app.algorithms.market_sizing import (
 def _make_input(**overrides) -> MarketSizingInput:
     defaults = dict(
         tam_transactions_uzs=Decimal("12_000_000_000"),  # 12 mlrd
-        sam_transactions_uzs=Decimal("1_200_000_000"),   # 1.2 mlrd
+        sam_transactions_uzs=Decimal("1_200_000_000"),  # 1.2 mlrd
         competitor_count_city=20,
         competitor_count_radius=4,
-        avg_monthly_revenue_uzs=Decimal("50_000_000"),   # 50 mln/oy
+        avg_monthly_revenue_uzs=Decimal("50_000_000"),  # 50 mln/oy
         median_monthly_revenue_uzs=Decimal("40_000_000"),
         annual_growth_rate_pct=0.08,
         gross_margin_pct=0.30,

@@ -1,8 +1,9 @@
 """Umumiy pytest fixturalari."""
 
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock
 
 from app.api.deps import get_session
 from app.main import app
@@ -11,6 +12,7 @@ from app.main import app
 @pytest.fixture
 def client():
     """Mocked session bilan TestClient."""
+
     def _override():
         yield MagicMock()
 

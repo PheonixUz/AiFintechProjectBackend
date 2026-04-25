@@ -19,7 +19,9 @@ from app.db.models.market import MarketBenchmark, MarketSizeEstimate
 from app.db.models.transaction import MCCCategory, Transaction
 
 
-def _bounding_box(lat: float, lon: float, radius_m: float) -> tuple[float, float, float, float]:
+def _bounding_box(
+    lat: float, lon: float, radius_m: float
+) -> tuple[float, float, float, float]:
     delta_lat = radius_m / 111_000
     delta_lon = radius_m / (111_000 * math.cos(math.radians(lat)))
     return lat - delta_lat, lat + delta_lat, lon - delta_lon, lon + delta_lon
@@ -30,7 +32,10 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return 2 * r * math.asin(math.sqrt(a))
 
 
@@ -62,13 +67,10 @@ class DataRepository:
         self,
         city: str,
         mcc_code: str | None = None,
-        niche: str | None = None,
     ) -> list[MarketBenchmark]:
         stmt = select(MarketBenchmark).where(MarketBenchmark.city == city)
         if mcc_code:
             stmt = stmt.where(MarketBenchmark.mcc_code == mcc_code)
-        if niche:
-            stmt = stmt.where(MarketBenchmark.niche == niche)
         stmt = stmt.order_by(MarketBenchmark.data_year.desc())
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -77,7 +79,7 @@ class DataRepository:
 
     async def get_competitors(
         self,
-        niche: str,
+        mcc_code: str,
         lat: float,
         lon: float,
         radius_m: float,
@@ -85,7 +87,7 @@ class DataRepository:
     ) -> list[dict]:
         min_lat, max_lat, min_lon, max_lon = _bounding_box(lat, lon, radius_m)
         stmt = select(Business).where(
-            Business.niche == niche,
+            Business.mcc_code == mcc_code,
             Business.lat.between(min_lat, max_lat),
             Business.lon.between(min_lon, max_lon),
         )
@@ -220,13 +222,13 @@ class DataRepository:
 
     async def get_market_estimates(
         self,
-        niche: str,
+        mcc_code: str,
         city: str | None = None,
         limit: int = 10,
     ) -> list[MarketSizeEstimate]:
         stmt = (
             select(MarketSizeEstimate)
-            .where(MarketSizeEstimate.niche == niche)
+            .where(MarketSizeEstimate.mcc_code == mcc_code)
             .order_by(MarketSizeEstimate.calculation_date.desc())
             .limit(limit)
         )
@@ -237,7 +239,7 @@ class DataRepository:
 
     async def get_market_estimate_by_location(
         self,
-        niche: str,
+        mcc_code: str,
         lat: float,
         lon: float,
         radius_m: float,
@@ -245,7 +247,7 @@ class DataRepository:
     ) -> MarketSizeEstimate | None:
         lat_delta, lon_delta = 0.0001, 0.0001
         stmt = select(MarketSizeEstimate).where(
-            MarketSizeEstimate.niche == niche,
+            MarketSizeEstimate.mcc_code == mcc_code,
             MarketSizeEstimate.radius_m == radius_m,
             MarketSizeEstimate.lat.between(lat - lat_delta, lat + lat_delta),
             MarketSizeEstimate.lon.between(lon - lon_delta, lon + lon_delta),

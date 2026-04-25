@@ -7,11 +7,9 @@ HTTP qatlami, validatsiya va response sxemalari tekshiriladi.
 
 from datetime import date
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from factories import (
     make_benchmark,
     make_business,
@@ -34,6 +32,7 @@ def _patch_repo(mock_repo_instance):
 
 
 # ── GET /api/v1/data/niches ────────────────────────────────────────────────────
+
 
 class TestGetNiches:
     def test_returns_200_with_list(self, client):
@@ -109,6 +108,7 @@ class TestGetNiches:
 
 # ── GET /api/v1/data/benchmarks ───────────────────────────────────────────────
 
+
 class TestGetBenchmarks:
     def test_returns_200_with_list(self, client):
         mock_repo = AsyncMock()
@@ -128,8 +128,15 @@ class TestGetBenchmarks:
         try:
             response = client.get("/api/v1/data/benchmarks")
             item = response.json()[0]
-            for field in ["mcc_code", "niche", "city", "avg_monthly_revenue_uzs",
-                          "gross_margin_pct", "annual_growth_rate_pct", "data_year"]:
+            for field in [
+                "mcc_code",
+                "niche",
+                "city",
+                "avg_monthly_revenue_uzs",
+                "gross_margin_pct",
+                "annual_growth_rate_pct",
+                "data_year",
+            ]:
                 assert field in item
         finally:
             p.stop()
@@ -182,6 +189,7 @@ class TestGetBenchmarks:
 
 
 # ── GET /api/v1/data/competitors ──────────────────────────────────────────────
+
 
 class TestGetCompetitors:
     def test_returns_200(self, client):
@@ -288,12 +296,16 @@ class TestGetCompetitors:
                 "/api/v1/data/competitors?niche=restoran&lat=41.3&lon=69.3&radius_m=2000"
             )
             call_kwargs = mock_repo.get_competitors.call_args
-            assert 2000.0 in call_kwargs.args or call_kwargs.kwargs.get("radius_m") == 2000.0
+            assert (
+                2000.0 in call_kwargs.args
+                or call_kwargs.kwargs.get("radius_m") == 2000.0
+            )
         finally:
             p.stop()
 
 
 # ── GET /api/v1/data/transactions ─────────────────────────────────────────────
+
 
 class TestGetTransactions:
     def test_returns_200(self, client):
@@ -390,6 +402,7 @@ class TestGetTransactions:
 
 # ── GET /api/v1/data/population ───────────────────────────────────────────────
 
+
 class TestGetPopulation:
     def test_returns_200(self, client):
         mock_repo = AsyncMock()
@@ -442,7 +455,9 @@ class TestGetPopulation:
         assert response.status_code == 422
 
     def test_radius_too_large_returns_422(self, client):
-        response = client.get("/api/v1/data/population?lat=41.3&lon=69.3&radius_m=50000")
+        response = client.get(
+            "/api/v1/data/population?lat=41.3&lon=69.3&radius_m=50000"
+        )
         assert response.status_code == 422
 
     def test_zone_fields_present(self, client):
@@ -452,14 +467,20 @@ class TestGetPopulation:
         try:
             response = client.get("/api/v1/data/population?lat=41.3&lon=69.3")
             zone = response.json()["zones"][0]
-            for field in ["zone_name", "district", "total_population",
-                          "avg_monthly_income_uzs", "data_year"]:
+            for field in [
+                "zone_name",
+                "district",
+                "total_population",
+                "avg_monthly_income_uzs",
+                "data_year",
+            ]:
                 assert field in zone
         finally:
             p.stop()
 
 
 # ── GET /api/v1/data/poi ──────────────────────────────────────────────────────
+
 
 class TestGetPOI:
     def test_returns_200(self, client):
@@ -553,6 +574,7 @@ class TestGetPOI:
 
 # ── GET /api/v1/data/customer-segments ────────────────────────────────────────
 
+
 class TestGetCustomerSegments:
     def test_returns_200(self, client):
         mock_repo = AsyncMock()
@@ -600,8 +622,13 @@ class TestGetCustomerSegments:
         try:
             response = client.get("/api/v1/data/customer-segments?lat=41.3&lon=69.3")
             seg = response.json()["segments"][0]
-            for field in ["segment_name", "district", "avg_monthly_spending_uzs",
-                          "purchase_frequency_monthly", "estimated_count"]:
+            for field in [
+                "segment_name",
+                "district",
+                "avg_monthly_spending_uzs",
+                "purchase_frequency_monthly",
+                "estimated_count",
+            ]:
                 assert field in seg
         finally:
             p.stop()
@@ -621,7 +648,9 @@ class TestGetCustomerSegments:
         mock_repo.get_customer_segments.return_value = []
         p = _patch_repo(mock_repo)
         try:
-            client.get("/api/v1/data/customer-segments?lat=41.3&lon=69.3&city=Samarqand")
+            client.get(
+                "/api/v1/data/customer-segments?lat=41.3&lon=69.3&city=Samarqand"
+            )
             call_args = mock_repo.get_customer_segments.call_args
             assert call_args.kwargs.get("city") == "Samarqand"
         finally:
@@ -629,6 +658,7 @@ class TestGetCustomerSegments:
 
 
 # ── GET /api/v1/data/market-estimates ─────────────────────────────────────────
+
 
 class TestGetMarketEstimates:
     def test_returns_200(self, client):
@@ -658,9 +688,17 @@ class TestGetMarketEstimates:
         try:
             response = client.get("/api/v1/data/market-estimates?niche=restoran")
             est = response.json()[0]
-            for field in ["niche", "mcc_code", "city", "tam_uzs", "sam_uzs",
-                          "som_uzs", "competitor_count", "confidence_score",
-                          "calculation_date"]:
+            for field in [
+                "niche",
+                "mcc_code",
+                "city",
+                "tam_uzs",
+                "sam_uzs",
+                "som_uzs",
+                "competitor_count",
+                "confidence_score",
+                "calculation_date",
+            ]:
                 assert field in est
         finally:
             p.stop()
@@ -707,6 +745,7 @@ class TestGetMarketEstimates:
 
 
 # ── GET /api/v1/data/market-estimates/by-location ─────────────────────────────
+
 
 class TestGetMarketEstimateByLocation:
     def test_returns_200_when_found(self, client):
@@ -788,7 +827,6 @@ class TestGetMarketEstimateByLocation:
 
     def test_invalid_lat_range_returns_422(self, client):
         response = client.get(
-            "/api/v1/data/market-estimates/by-location"
-            "?niche=restoran&lat=200&lon=69.3"
+            "/api/v1/data/market-estimates/by-location?niche=restoran&lat=200&lon=69.3"
         )
         assert response.status_code == 422

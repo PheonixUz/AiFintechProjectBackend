@@ -39,7 +39,9 @@ class MCCCategory(Base):
     parent_category: Mapped[str] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    transactions: Mapped[list["Transaction"]] = relationship(back_populates="mcc_category")
+    transactions: Mapped[list["Transaction"]] = relationship(
+        back_populates="mcc_category"
+    )
 
     def __repr__(self) -> str:
         return f"<MCCCategory {self.mcc_code}: {self.niche_name_uz}>"
@@ -66,13 +68,17 @@ class Transaction(Base):
     merchant_lat: Mapped[float | None] = mapped_column(nullable=True)
     merchant_lon: Mapped[float | None] = mapped_column(nullable=True)
     merchant_district: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    merchant_city: Mapped[str] = mapped_column(String(100), nullable=False, default="Toshkent")
+    merchant_city: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="Toshkent"
+    )
 
     # Anonymlashtirilgan mijoz ma'lumotlari (segmentatsiya uchun)
     customer_age_group: Mapped[str | None] = mapped_column(
         String(10), nullable=True
     )  # "18-25", "26-35", "36-50", "50+"
-    customer_gender: Mapped[str | None] = mapped_column(String(1), nullable=True)  # "M", "F"
+    customer_gender: Mapped[str | None] = mapped_column(
+        String(1), nullable=True
+    )  # "M", "F"
 
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -83,7 +89,12 @@ class Transaction(Base):
 
     __table_args__ = (
         # TAM so'rovlari: shahar + MCC + sana oralig'i
-        Index("ix_transactions_city_mcc_date", "merchant_city", "mcc_code", "transaction_date"),
+        Index(
+            "ix_transactions_city_mcc_date",
+            "merchant_city",
+            "mcc_code",
+            "transaction_date",
+        ),
         # SAM so'rovlari: koordinata bo'yicha bounding box filter
         Index("ix_transactions_lat_lon", "merchant_lat", "merchant_lon"),
         Index("ix_transactions_mcc_date", "mcc_code", "transaction_date"),

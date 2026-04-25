@@ -21,7 +21,9 @@ from app.db.models.market import MarketBenchmark, MarketSizeEstimate
 from app.db.models.transaction import Transaction
 
 
-def _bounding_box(lat: float, lon: float, radius_m: float) -> tuple[float, float, float, float]:
+def _bounding_box(
+    lat: float, lon: float, radius_m: float
+) -> tuple[float, float, float, float]:
     """Radius asosida taxminiy bounding box qaytaradi (lat/lon daraja)."""
     delta_lat = radius_m / 111_000
     delta_lon = radius_m / (111_000 * math.cos(math.radians(lat)))
@@ -34,7 +36,10 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
     return 2 * r * math.asin(math.sqrt(a))
 
 
@@ -165,7 +170,7 @@ class MarketRepository:
 
     async def get_competitor_count(
         self,
-        niche: str,
+        mcc_code: str,
         lat: float,
         lon: float,
         radius_m: float,
@@ -174,7 +179,7 @@ class MarketRepository:
         min_lat, max_lat, min_lon, max_lon = _bounding_box(lat, lon, radius_m)
 
         stmt = select(Business.id, Business.lat, Business.lon).where(
-            Business.niche == niche,
+            Business.mcc_code == mcc_code,
             Business.is_active.is_(True),
             Business.lat.between(min_lat, max_lat),
             Business.lon.between(min_lon, max_lon),
@@ -192,7 +197,6 @@ class MarketRepository:
     async def get_som(
         self,
         mcc_code: str,
-        niche: str,
         lat: float,
         lon: float,
         radius_m: float,
@@ -206,7 +210,7 @@ class MarketRepository:
         afzalliklarga asosida tuzatish koeffitsienti (0.5 – 1.5).
         """
         sam = await self.get_sam(mcc_code, lat, lon, radius_m, year)
-        competitors = await self.get_competitor_count(niche, lat, lon, radius_m)
+        competitors = await self.get_competitor_count(mcc_code, lat, lon, radius_m)
         share = Decimal(1) / Decimal(competitors + 1)
         return sam * share * Decimal(str(quality_factor))
 
@@ -228,38 +232,24 @@ class MarketRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_benchmarks_by_niche(self, niche: str, city: str) -> MarketBenchmark | None:
-        stmt = (
-            select(MarketBenchmark)
-            .where(
-                MarketBenchmark.niche == niche,
-                MarketBenchmark.city == city,
-            )
-            .order_by(MarketBenchmark.data_year.desc())
-            .limit(1)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
     # ------------------------------------------------------------------
     # Kesh — MarketSizeEstimate
     # ------------------------------------------------------------------
 
     async def get_cached_estimate(
         self,
-        niche: str,
+        mcc_code: str,
         lat: float,
         lon: float,
         radius_m: float,
         calculation_date: date,
     ) -> MarketSizeEstimate | None:
         """Bugungi sana uchun keshdan TAM/SAM/SOM ni qaytaradi."""
-        # ~10m aniqlik bilan koordinata mosligini tekshirish
         lat_delta = 0.0001
         lon_delta = 0.0001
 
         stmt = select(MarketSizeEstimate).where(
-            MarketSizeEstimate.niche == niche,
+            MarketSizeEstimate.mcc_code == mcc_code,
             MarketSizeEstimate.radius_m == radius_m,
             MarketSizeEstimate.lat.between(lat - lat_delta, lat + lat_delta),
             MarketSizeEstimate.lon.between(lon - lon_delta, lon + lon_delta),
@@ -270,7 +260,6 @@ class MarketRepository:
 
     async def save_estimate(
         self,
-        niche: str,
         mcc_code: str,
         city: str,
         lat: float,
@@ -286,7 +275,7 @@ class MarketRepository:
         calculation_date: date,
     ) -> MarketSizeEstimate:
         estimate = MarketSizeEstimate(
-            niche=niche,
+            niche=mcc_code,
             mcc_code=mcc_code,
             city=city,
             lat=lat,

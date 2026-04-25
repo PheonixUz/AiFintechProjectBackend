@@ -18,7 +18,6 @@ async def execute_get_market_data(
     session: AsyncSession,
     *,
     mcc_code: str,
-    niche: str,
     lat: float,
     lon: float,
     radius_m: float,
@@ -39,9 +38,11 @@ async def execute_get_market_data(
     sam = sum((r["amount_uzs"] for r in sam_rows), Decimal(0))
     transaction_sample_size = len(sam_rows)
 
-    competitor_count_radius = await repo.get_competitor_count(niche, lat, lon, radius_m)
+    competitor_count_radius = await repo.get_competitor_count(
+        mcc_code, lat, lon, radius_m
+    )
     competitor_count_city = await repo.get_competitor_count(
-        niche, lat, lon, _CITY_RADIUS_M
+        mcc_code, lat, lon, _CITY_RADIUS_M
     )
 
     benchmark = await repo.get_benchmarks(mcc_code, city)

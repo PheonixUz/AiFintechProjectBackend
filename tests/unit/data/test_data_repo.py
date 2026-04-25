@@ -5,7 +5,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-
 from factories import (
     make_async_session,
     make_benchmark,
@@ -16,10 +15,11 @@ from factories import (
     make_poi,
     make_population_zone,
 )
+
 from app.db.repositories.data_repo import DataRepository
 
-
 # ── MCC Kategoriyalar ──────────────────────────────────────────────────────────
+
 
 class TestGetMCCCategories:
     @pytest.mark.asyncio
@@ -65,6 +65,7 @@ class TestGetMCCByParent:
 
 # ── Benchmarklar ───────────────────────────────────────────────────────────────
 
+
 class TestGetBenchmarks:
     @pytest.mark.asyncio
     async def test_returns_benchmarks_for_city(self):
@@ -93,20 +94,23 @@ class TestGetBenchmarks:
         session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_niche_filter_executes_query(self):
+    async def test_mcc_filter_only_executes_query(self):
         session = make_async_session(scalars_result=[])
-        await DataRepository(session).get_benchmarks(city="Toshkent", niche="restoran")
+        await DataRepository(session).get_benchmarks(city="Toshkent", mcc_code="5812")
         session.execute.assert_called_once()
 
 
 # ── Raqobatchilar ──────────────────────────────────────────────────────────────
+
 
 class TestGetCompetitors:
     @pytest.mark.asyncio
     async def test_competitor_at_center_included(self):
         b = make_business(lat=41.3, lon=69.3)
         session = make_async_session(scalars_result=[b])
-        results = await DataRepository(session).get_competitors("restoran", 41.3, 69.3, 1000)
+        results = await DataRepository(session).get_competitors(
+            "restoran", 41.3, 69.3, 1000
+        )
         assert len(results) == 1
         assert results[0]["distance_m"] == pytest.approx(0.0, abs=0.1)
 
@@ -115,59 +119,80 @@ class TestGetCompetitors:
         # ~14 km uzoqlikda
         b = make_business(lat=41.43, lon=69.3)
         session = make_async_session(scalars_result=[b])
-        results = await DataRepository(session).get_competitors("restoran", 41.3, 69.3, 1000)
+        results = await DataRepository(session).get_competitors(
+            "restoran", 41.3, 69.3, 1000
+        )
         assert results == []
 
     @pytest.mark.asyncio
     async def test_results_sorted_by_distance_ascending(self):
-        near = make_business(id=1, lat=41.301, lon=69.3)   # ~111 m
-        far = make_business(id=2, lat=41.307, lon=69.3)    # ~777 m
+        near = make_business(id=1, lat=41.301, lon=69.3)  # ~111 m
+        far = make_business(id=2, lat=41.307, lon=69.3)  # ~777 m
         session = make_async_session(scalars_result=[far, near])
-        results = await DataRepository(session).get_competitors("restoran", 41.3, 69.3, 1000)
+        results = await DataRepository(session).get_competitors(
+            "restoran", 41.3, 69.3, 1000
+        )
         assert len(results) == 2
         assert results[0]["business"].id == 1
         assert results[0]["distance_m"] < results[1]["distance_m"]
 
     @pytest.mark.asyncio
     async def test_multiple_within_radius_all_returned(self):
-        businesses = [make_business(id=i, lat=41.3 + i * 0.001, lon=69.3) for i in range(5)]
+        businesses = [
+            make_business(id=i, lat=41.3 + i * 0.001, lon=69.3) for i in range(5)
+        ]
         session = make_async_session(scalars_result=businesses)
-        results = await DataRepository(session).get_competitors("restoran", 41.3, 69.3, 1000)
+        results = await DataRepository(session).get_competitors(
+            "restoran", 41.3, 69.3, 1000
+        )
         assert len(results) == 5
 
     @pytest.mark.asyncio
     async def test_empty_db_returns_empty_list(self):
         session = make_async_session(scalars_result=[])
-        results = await DataRepository(session).get_competitors("restoran", 41.3, 69.3, 1000)
+        results = await DataRepository(session).get_competitors(
+            "restoran", 41.3, 69.3, 1000
+        )
         assert results == []
 
     @pytest.mark.asyncio
     async def test_result_contains_business_and_distance(self):
         b = make_business(lat=41.3, lon=69.3)
         session = make_async_session(scalars_result=[b])
-        results = await DataRepository(session).get_competitors("restoran", 41.3, 69.3, 1000)
+        results = await DataRepository(session).get_competitors(
+            "restoran", 41.3, 69.3, 1000
+        )
         assert "business" in results[0]
         assert "distance_m" in results[0]
 
 
 # ── Tranzaksiya statistikasi ───────────────────────────────────────────────────
 
+
 class TestGetTransactionMonthlyBreakdown:
     @pytest.mark.asyncio
     async def test_returns_12_months_when_full_year(self):
         rows = [
-            SimpleNamespace(month=float(m), total_uzs=Decimal("100_000_000"), transaction_count=150)
+            SimpleNamespace(
+                month=float(m), total_uzs=Decimal("100_000_000"), transaction_count=150
+            )
             for m in range(1, 13)
         ]
         session = make_async_session(rows_result=rows)
-        result = await DataRepository(session).get_transaction_monthly_breakdown("5812", "Toshkent", 2025)
+        result = await DataRepository(session).get_transaction_monthly_breakdown(
+            "5812", "Toshkent", 2025
+        )
         assert len(result) == 12
 
     @pytest.mark.asyncio
     async def test_month_is_int(self):
-        row = SimpleNamespace(month=1.0, total_uzs=Decimal("50_000_000"), transaction_count=100)
+        row = SimpleNamespace(
+            month=1.0, total_uzs=Decimal("50_000_000"), transaction_count=100
+        )
         session = make_async_session(rows_result=[row])
-        result = await DataRepository(session).get_transaction_monthly_breakdown("5812", "Toshkent", 2025)
+        result = await DataRepository(session).get_transaction_monthly_breakdown(
+            "5812", "Toshkent", 2025
+        )
         assert isinstance(result[0]["month"], int)
         assert result[0]["month"] == 1
 
@@ -175,24 +200,33 @@ class TestGetTransactionMonthlyBreakdown:
     async def test_null_total_becomes_zero(self):
         row = SimpleNamespace(month=5.0, total_uzs=None, transaction_count=0)
         session = make_async_session(rows_result=[row])
-        result = await DataRepository(session).get_transaction_monthly_breakdown("5812", "Toshkent", 2025)
+        result = await DataRepository(session).get_transaction_monthly_breakdown(
+            "5812", "Toshkent", 2025
+        )
         assert result[0]["total_uzs"] == Decimal(0)
 
     @pytest.mark.asyncio
     async def test_empty_returns_empty_list(self):
         session = make_async_session(rows_result=[])
-        result = await DataRepository(session).get_transaction_monthly_breakdown("9999", "Andijon", 2020)
+        result = await DataRepository(session).get_transaction_monthly_breakdown(
+            "9999", "Andijon", 2020
+        )
         assert result == []
 
     @pytest.mark.asyncio
     async def test_result_has_correct_keys(self):
-        row = SimpleNamespace(month=3.0, total_uzs=Decimal("30_000_000"), transaction_count=200)
+        row = SimpleNamespace(
+            month=3.0, total_uzs=Decimal("30_000_000"), transaction_count=200
+        )
         session = make_async_session(rows_result=[row])
-        result = await DataRepository(session).get_transaction_monthly_breakdown("5812", "Toshkent", 2025)
+        result = await DataRepository(session).get_transaction_monthly_breakdown(
+            "5812", "Toshkent", 2025
+        )
         assert set(result[0].keys()) == {"month", "total_uzs", "transaction_count"}
 
 
 # ── Aholi zonalari ─────────────────────────────────────────────────────────────
+
 
 class TestGetPopulationZones:
     @pytest.mark.asyncio
@@ -212,8 +246,8 @@ class TestGetPopulationZones:
 
     @pytest.mark.asyncio
     async def test_multiple_zones_filtered_correctly(self):
-        near = make_population_zone(id=1, lat=41.302, lon=69.3)   # ~222 m
-        far = make_population_zone(id=2, lat=41.42, lon=69.3)     # ~13.4 km
+        near = make_population_zone(id=1, lat=41.302, lon=69.3)  # ~222 m
+        far = make_population_zone(id=2, lat=41.42, lon=69.3)  # ~13.4 km
         session = make_async_session(scalars_result=[near, far])
         result = await DataRepository(session).get_population_zones(41.3, 69.3, 1000)
         assert len(result) == 1
@@ -227,15 +261,22 @@ class TestGetPopulationZones:
 
     @pytest.mark.asyncio
     async def test_large_radius_includes_more_zones(self):
-        zones = [make_population_zone(id=i, lat=41.3 + i * 0.01, lon=69.3) for i in range(5)]
+        zones = [
+            make_population_zone(id=i, lat=41.3 + i * 0.01, lon=69.3) for i in range(5)
+        ]
         session = make_async_session(scalars_result=zones)
-        result_small = await DataRepository(session).get_population_zones(41.3, 69.3, 500)
+        result_small = await DataRepository(session).get_population_zones(
+            41.3, 69.3, 500
+        )
         session = make_async_session(scalars_result=zones)
-        result_large = await DataRepository(session).get_population_zones(41.3, 69.3, 5000)
+        result_large = await DataRepository(session).get_population_zones(
+            41.3, 69.3, 5000
+        )
         assert len(result_large) >= len(result_small)
 
 
 # ── POI ────────────────────────────────────────────────────────────────────────
+
 
 class TestGetPOIs:
     @pytest.mark.asyncio
@@ -287,6 +328,7 @@ class TestGetPOIs:
 
 # ── Mijoz segmentlari ──────────────────────────────────────────────────────────
 
+
 class TestGetCustomerSegments:
     @pytest.mark.asyncio
     async def test_segment_at_center_included(self):
@@ -320,6 +362,7 @@ class TestGetCustomerSegments:
 
 
 # ── Bozor tahminlari ───────────────────────────────────────────────────────────
+
 
 class TestGetMarketEstimates:
     @pytest.mark.asyncio

@@ -39,6 +39,7 @@ router = APIRouter(prefix="/data", tags=["Data: Market ma'lumotlari"])
 
 # ── MCC Kategoriyalar ──────────────────────────────────────────────────────────
 
+
 @router.get(
     "/niches",
     response_model=list[MCCCategoryOut],
@@ -47,7 +48,9 @@ router = APIRouter(prefix="/data", tags=["Data: Market ma'lumotlari"])
 )
 async def get_niches(
     active_only: bool = Query(default=True, description="Faqat faol kategoriyalar"),
-    parent_category: str | None = Query(default=None, description="Yuqori kategoriya filtri"),
+    parent_category: str | None = Query(
+        default=None, description="Yuqori kategoriya filtri"
+    ),
     session: AsyncSession = Depends(get_session),
 ) -> list[MCCCategoryOut]:
     repo = DataRepository(session)
@@ -59,6 +62,7 @@ async def get_niches(
 
 
 # ── Benchmarklar ───────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/benchmarks",
@@ -72,15 +76,15 @@ async def get_niches(
 async def get_benchmarks(
     city: str = Query(default="Toshkent", description="Shahar nomi"),
     mcc_code: str | None = Query(default=None, description="MCC kod (4 raqam)"),
-    niche: str | None = Query(default=None, description="Biznes nishasi (masalan: restoran)"),
     session: AsyncSession = Depends(get_session),
 ) -> list[BenchmarkOut]:
     repo = DataRepository(session)
-    benchmarks = await repo.get_benchmarks(city=city, mcc_code=mcc_code, niche=niche)
+    benchmarks = await repo.get_benchmarks(city=city, mcc_code=mcc_code)
     return [BenchmarkOut.model_validate(b) for b in benchmarks]
 
 
 # ── Raqobatchilar ──────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/competitors",
@@ -92,16 +96,20 @@ async def get_benchmarks(
     ),
 )
 async def get_competitors(
-    niche: str = Query(..., description="Biznes nishasi (masalan: restoran)"),
+    mcc_code: str = Query(
+        ..., min_length=4, max_length=4, description="MCC kod (4 raqam)"
+    ),
     lat: float = Query(..., ge=-90, le=90, description="Kenglik (latitude)"),
     lon: float = Query(..., ge=-180, le=180, description="Uzunlik (longitude)"),
-    radius_m: float = Query(default=1000, ge=100, le=10_000, description="Radius (metr)"),
+    radius_m: float = Query(
+        default=1000, ge=100, le=10_000, description="Radius (metr)"
+    ),
     active_only: bool = Query(default=True, description="Faqat faol bizneslar"),
     session: AsyncSession = Depends(get_session),
 ) -> CompetitorListOut:
     repo = DataRepository(session)
     results = await repo.get_competitors(
-        niche=niche, lat=lat, lon=lon, radius_m=radius_m, active_only=active_only
+        mcc_code=mcc_code, lat=lat, lon=lon, radius_m=radius_m, active_only=active_only
     )
     competitors = []
     for r in results:
@@ -109,7 +117,7 @@ async def get_competitors(
         out = out.model_copy(update={"distance_m": r["distance_m"]})
         competitors.append(out)
     return CompetitorListOut(
-        niche=niche,
+        mcc_code=mcc_code,
         lat=lat,
         lon=lon,
         radius_m=radius_m,
@@ -119,6 +127,7 @@ async def get_competitors(
 
 
 # ── Tranzaksiya statistikasi ───────────────────────────────────────────────────
+
 
 @router.get(
     "/transactions",
@@ -130,7 +139,9 @@ async def get_competitors(
     ),
 )
 async def get_transactions(
-    mcc_code: str = Query(..., min_length=4, max_length=4, description="MCC kod (4 raqam)"),
+    mcc_code: str = Query(
+        ..., min_length=4, max_length=4, description="MCC kod (4 raqam)"
+    ),
     city: str = Query(default="Toshkent", description="Shahar nomi"),
     year: int = Query(default=2025, ge=2020, le=2030, description="Yil"),
     session: AsyncSession = Depends(get_session),
@@ -152,6 +163,7 @@ async def get_transactions(
 
 # ── Aholi zonalari ─────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/population",
     response_model=PopulationListOut,
@@ -164,12 +176,16 @@ async def get_transactions(
 async def get_population(
     lat: float = Query(..., ge=-90, le=90, description="Kenglik (latitude)"),
     lon: float = Query(..., ge=-180, le=180, description="Uzunlik (longitude)"),
-    radius_m: float = Query(default=1000, ge=100, le=20_000, description="Radius (metr)"),
+    radius_m: float = Query(
+        default=1000, ge=100, le=20_000, description="Radius (metr)"
+    ),
     city: str | None = Query(default=None, description="Shahar nomi filtri"),
     session: AsyncSession = Depends(get_session),
 ) -> PopulationListOut:
     repo = DataRepository(session)
-    zones = await repo.get_population_zones(lat=lat, lon=lon, radius_m=radius_m, city=city)
+    zones = await repo.get_population_zones(
+        lat=lat, lon=lon, radius_m=radius_m, city=city
+    )
     zone_outs = [PopulationZoneOut.model_validate(z) for z in zones]
     total_pop = sum(z.total_population for z in zone_outs)
     return PopulationListOut(
@@ -183,6 +199,7 @@ async def get_population(
 
 
 # ── POI ────────────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/poi",
@@ -225,6 +242,7 @@ async def get_poi(
 
 # ── Mijoz segmentlari ──────────────────────────────────────────────────────────
 
+
 @router.get(
     "/customer-segments",
     response_model=CustomerSegmentListOut,
@@ -237,12 +255,16 @@ async def get_poi(
 async def get_customer_segments(
     lat: float = Query(..., ge=-90, le=90, description="Kenglik (latitude)"),
     lon: float = Query(..., ge=-180, le=180, description="Uzunlik (longitude)"),
-    radius_m: float = Query(default=1000, ge=100, le=10_000, description="Radius (metr)"),
+    radius_m: float = Query(
+        default=1000, ge=100, le=10_000, description="Radius (metr)"
+    ),
     city: str | None = Query(default=None, description="Shahar nomi filtri"),
     session: AsyncSession = Depends(get_session),
 ) -> CustomerSegmentListOut:
     repo = DataRepository(session)
-    segments = await repo.get_customer_segments(lat=lat, lon=lon, radius_m=radius_m, city=city)
+    segments = await repo.get_customer_segments(
+        lat=lat, lon=lon, radius_m=radius_m, city=city
+    )
     seg_outs = [CustomerSegmentOut.model_validate(s) for s in segments]
     total_customers = sum(s.estimated_count for s in seg_outs)
     return CustomerSegmentListOut(
@@ -257,6 +279,7 @@ async def get_customer_segments(
 
 # ── Bozor tahminlari ───────────────────────────────────────────────────────────
 
+
 @router.get(
     "/market-estimates",
     response_model=list[MarketEstimateOut],
@@ -267,13 +290,17 @@ async def get_customer_segments(
     ),
 )
 async def get_market_estimates(
-    niche: str = Query(..., description="Biznes nishasi"),
+    mcc_code: str = Query(
+        ..., min_length=4, max_length=4, description="MCC kod (4 raqam)"
+    ),
     city: str | None = Query(default=None, description="Shahar nomi filtri"),
     limit: int = Query(default=10, ge=1, le=50, description="Natijalar soni"),
     session: AsyncSession = Depends(get_session),
 ) -> list[MarketEstimateOut]:
     repo = DataRepository(session)
-    estimates = await repo.get_market_estimates(niche=niche, city=city, limit=limit)
+    estimates = await repo.get_market_estimates(
+        mcc_code=mcc_code, city=city, limit=limit
+    )
     return [MarketEstimateOut.model_validate(e) for e in estimates]
 
 
@@ -284,16 +311,26 @@ async def get_market_estimates(
     description="Berilgan koordinata, radius va nisha uchun eng so'nggi saqlangan tahminni qaytaradi.",
 )
 async def get_market_estimate_by_location(
-    niche: str = Query(..., description="Biznes nishasi"),
+    mcc_code: str = Query(
+        ..., min_length=4, max_length=4, description="MCC kod (4 raqam)"
+    ),
     lat: float = Query(..., ge=-90, le=90, description="Kenglik (latitude)"),
     lon: float = Query(..., ge=-180, le=180, description="Uzunlik (longitude)"),
-    radius_m: float = Query(default=1000, ge=100, le=10_000, description="Radius (metr)"),
-    calculation_date: date | None = Query(default=None, description="Hisoblash sanasi (YYYY-MM-DD)"),
+    radius_m: float = Query(
+        default=1000, ge=100, le=10_000, description="Radius (metr)"
+    ),
+    calculation_date: date | None = Query(
+        default=None, description="Hisoblash sanasi (YYYY-MM-DD)"
+    ),
     session: AsyncSession = Depends(get_session),
 ) -> MarketEstimateOut | None:
     repo = DataRepository(session)
     estimate = await repo.get_market_estimate_by_location(
-        niche=niche, lat=lat, lon=lon, radius_m=radius_m, calculation_date=calculation_date
+        mcc_code=mcc_code,
+        lat=lat,
+        lon=lon,
+        radius_m=radius_m,
+        calculation_date=calculation_date,
     )
     if estimate is None:
         return None

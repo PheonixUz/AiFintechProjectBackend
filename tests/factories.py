@@ -5,8 +5,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-
 # ── Mock session ───────────────────────────────────────────────────────────────
+
 
 def make_async_session(scalars_result=None, scalar_result=None, rows_result=None):
     """Mock AsyncSession qaytaradi."""
@@ -25,12 +25,16 @@ def make_async_session(scalars_result=None, scalar_result=None, rows_result=None
 
 # ── DB ob'ektlari ──────────────────────────────────────────────────────────────
 
+
 def make_mcc_category(**kwargs):
     defaults = dict(
-        id=1, mcc_code="5812",
+        id=1,
+        mcc_code="5812",
         category_name_en="Eating Places, Restaurants",
-        niche_name_uz="Restoran", niche_name_ru="Ресторан",
-        parent_category="Oziq-ovqat", is_active=True,
+        niche_name_uz="Restoran",
+        niche_name_ru="Ресторан",
+        parent_category="Oziq-ovqat",
+        is_active=True,
     )
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -38,7 +42,10 @@ def make_mcc_category(**kwargs):
 
 def make_benchmark(**kwargs):
     defaults = dict(
-        id=1, mcc_code="5812", niche="restoran", city="Toshkent",
+        id=1,
+        mcc_code="5812",
+        niche="restoran",
+        city="Toshkent",
         avg_monthly_revenue_uzs=Decimal("50_000_000"),
         median_monthly_revenue_uzs=Decimal("40_000_000"),
         p25_monthly_revenue_uzs=Decimal("25_000_000"),
@@ -58,10 +65,14 @@ def make_benchmark(**kwargs):
 
 def make_business(**kwargs):
     defaults = dict(
-        id=1, name="Test Restoran", niche="restoran",
+        id=1,
+        name="Test Restoran",
+        niche="restoran",
         mcc_code="5812",
-        lat=41.3, lon=69.3,
-        district="Yunusobod", city="Toshkent",
+        lat=41.3,
+        lon=69.3,
+        district="Yunusobod",
+        city="Toshkent",
         address="Amir Temur ko'chasi 1",
         is_active=True,
         registered_date=date(2022, 1, 1),
@@ -77,8 +88,13 @@ def make_business(**kwargs):
 
 def make_population_zone(**kwargs):
     defaults = dict(
-        id=1, zone_name="Yunusobod 1", district="Yunusobod",
-        city="Toshkent", lat=41.3, lon=69.3, radius_m=500.0,
+        id=1,
+        zone_name="Yunusobod 1",
+        district="Yunusobod",
+        city="Toshkent",
+        lat=41.3,
+        lon=69.3,
+        radius_m=500.0,
         total_population=15_000,
         working_age_population=9_000,
         youth_population=4_000,
@@ -92,10 +108,15 @@ def make_population_zone(**kwargs):
 
 def make_poi(**kwargs):
     defaults = dict(
-        id=1, name="Chorsu bozori", poi_type="market",
-        lat=41.3, lon=69.3,
-        district="Eski shahar", city="Toshkent",
-        capacity_est=1000, daily_visitors_est=5000,
+        id=1,
+        name="Chorsu bozori",
+        poi_type="market",
+        lat=41.3,
+        lon=69.3,
+        district="Eski shahar",
+        city="Toshkent",
+        capacity_est=1000,
+        daily_visitors_est=5000,
         is_active=True,
     )
     defaults.update(kwargs)
@@ -104,9 +125,13 @@ def make_poi(**kwargs):
 
 def make_customer_segment(**kwargs):
     defaults = dict(
-        id=1, segment_name="mass_market",
-        district="Yunusobod", city="Toshkent",
-        lat=41.3, lon=69.3, radius_m=500.0,
+        id=1,
+        segment_name="mass_market",
+        district="Yunusobod",
+        city="Toshkent",
+        lat=41.3,
+        lon=69.3,
+        radius_m=500.0,
         avg_monthly_spending_uzs=Decimal("1_500_000"),
         purchase_frequency_monthly=8.5,
         avg_check_uzs=Decimal("180_000"),
@@ -121,8 +146,13 @@ def make_customer_segment(**kwargs):
 
 def make_market_estimate(**kwargs):
     defaults = dict(
-        id=1, niche="restoran", mcc_code="5812", city="Toshkent",
-        lat=41.3, lon=69.3, radius_m=1000.0,
+        id=1,
+        niche="restoran",
+        mcc_code="5812",
+        city="Toshkent",
+        lat=41.3,
+        lon=69.3,
+        radius_m=1000.0,
         tam_uzs=Decimal("12_000_000_000"),
         sam_uzs=Decimal("1_200_000_000"),
         som_uzs=Decimal("240_000_000"),

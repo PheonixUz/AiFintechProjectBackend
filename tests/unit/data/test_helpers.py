@@ -1,9 +1,5 @@
 """_bounding_box va _haversine_m sof funksiyalariga unit testlar."""
 
-import math
-
-import pytest
-
 from app.db.repositories.data_repo import _bounding_box, _haversine_m
 
 
