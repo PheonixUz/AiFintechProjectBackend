@@ -115,3 +115,36 @@ class ViabilityCheckResponse(BaseModel):
     analysis_summary: str
     methodology_notes: dict
     cashflow_months: list[ViabilityCashflowMonthOut]
+
+
+class ChurnRiskFactorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    rank: int
+    factor_name: str
+    factor_group: str
+    factor_value: str | None = None
+    baseline_value: str | None = None
+    impact_score: float
+    direction: str
+    explanation: str
+
+
+class ChurnPredictionResponse(BaseModel):
+    run_id: int
+    feature_snapshot_id: int
+    model_version_id: int | None
+    business_id: int | None
+    niche: str
+    mcc_code: str
+    city: str
+    as_of_date: date
+    prediction_horizon_months: int
+    closure_probability_24m: float
+    survival_probability_24m: float
+    risk_bucket: str
+    risk_score: float
+    confidence_score: float
+    top_factors: list[ChurnRiskFactorOut]
+    prediction_summary: str
+    methodology_notes: dict

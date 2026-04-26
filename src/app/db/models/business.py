@@ -52,6 +52,15 @@ class Business(Base):
     registered_date: Mapped[date] = mapped_column(Date, nullable=False)
     closed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_observed_active_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+    closure_reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    closure_confidence_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
 
     # Operatsional ma'lumotlar (taxminiy)
     employee_count_est: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -80,8 +89,16 @@ class Business(Base):
         Index("ix_businesses_mcc_city_active", "mcc_code", "city", "is_active"),
         # Yopilish statistikasi so'rovi
         Index("ix_businesses_mcc_closed", "mcc_code", "closed_date"),
+        Index(
+            "ix_businesses_lifecycle_observed",
+            "is_active",
+            "last_observed_active_date",
+        ),
     )
 
     def __repr__(self) -> str:
         status = "faol" if self.is_active else "yopilgan"
-        return f"<Business {self.id}: {self.niche} [{status}] @ ({self.lat:.3f}, {self.lon:.3f})>"
+        return (
+            f"<Business {self.id}: {self.niche} "
+            f"[{status}] @ ({self.lat:.3f}, {self.lon:.3f})>"
+        )

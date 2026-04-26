@@ -21,6 +21,12 @@ from app.schemas.response import DemandForecastPointOut, DemandForecastResponse
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_CONFIDENCE_LEVEL = 0.95
+_DEFAULT_ANNUAL_INFLATION_RATE_PCT = 0.12
+_DEFAULT_ANNUAL_MACRO_GROWTH_PCT = 0.03
+_DEFAULT_USE_HOLIDAY_ADJUSTMENTS = True
+_DEFAULT_CLEAN_ANOMALIES = True
+
 
 def _format_money(value: Decimal) -> str:
     return f"{float(value) / 1_000_000:.1f} mln UZS"
@@ -81,8 +87,8 @@ class DemandForecastAgent:
             self._session,
             mcc_code=req.mcc_code,
             city=req.city,
-            start_month=req.start_month,
-            end_month=req.end_month,
+            start_month=None,
+            end_month=None,
             lat=req.lat,
             lon=req.lon,
             radius_m=req.radius_m,
@@ -91,7 +97,7 @@ class DemandForecastAgent:
         history_rows = data["history"]
         if not history_rows:
             raise RuntimeError("Forecast uchun tarixiy revenue ma'lumotlari topilmadi")
-        resolved_niche = req.niche or history_rows[0].niche
+        resolved_niche = history_rows[0].niche
 
         algo_input = DemandForecastInput(
             history=[
@@ -103,12 +109,12 @@ class DemandForecastAgent:
                 for row in history_rows
             ],
             horizon_months=req.horizon_months,
-            confidence_level=req.confidence_level,
-            annual_inflation_rate_pct=req.annual_inflation_rate_pct,
-            annual_macro_growth_pct=req.annual_macro_growth_pct,
+            confidence_level=_DEFAULT_CONFIDENCE_LEVEL,
+            annual_inflation_rate_pct=_DEFAULT_ANNUAL_INFLATION_RATE_PCT,
+            annual_macro_growth_pct=_DEFAULT_ANNUAL_MACRO_GROWTH_PCT,
             recent_new_competitor_count=data["recent_new_competitor_count"],
-            clean_anomalies=req.clean_anomalies,
-            use_holiday_adjustments=req.use_holiday_adjustments,
+            clean_anomalies=_DEFAULT_CLEAN_ANOMALIES,
+            use_holiday_adjustments=_DEFAULT_USE_HOLIDAY_ADJUSTMENTS,
         )
         algo_result = run_demand_forecast(algo_input)
 
@@ -147,7 +153,7 @@ class DemandForecastAgent:
             history_start_date=history_rows[0].month,
             history_end_date=history_rows[-1].month,
             forecast_start_month=algo_result.points[0].forecast_month,
-            confidence_level=req.confidence_level,
+            confidence_level=_DEFAULT_CONFIDENCE_LEVEL,
             training_sample_size=algo_result.training_sample_size,
             train_mape_pct=algo_result.train_mape_pct,
             train_rmse_uzs=algo_result.train_rmse_uzs,
@@ -167,7 +173,7 @@ class DemandForecastAgent:
                     "macro_adjustment_pct": p.macro_adjustment_pct,
                     "competitor_pressure_pct": p.competitor_pressure_pct,
                     "event_flags": p.event_flags,
-                    "confidence_level": req.confidence_level,
+                    "confidence_level": _DEFAULT_CONFIDENCE_LEVEL,
                 }
                 for p in algo_result.points
             ],
@@ -178,7 +184,7 @@ class DemandForecastAgent:
             mcc_code=req.mcc_code,
             city=req.city,
             horizon_months=req.horizon_months,
-            confidence_level=req.confidence_level,
+            confidence_level=_DEFAULT_CONFIDENCE_LEVEL,
             confidence_score=algo_result.confidence_score,
             training_sample_size=algo_result.training_sample_size,
             train_mape_pct=algo_result.train_mape_pct,

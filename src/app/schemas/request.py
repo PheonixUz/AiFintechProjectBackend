@@ -19,13 +19,6 @@ class MarketSizingRequest(BaseModel):
 
 
 class DemandForecastRequest(BaseModel):
-    niche: str | None = Field(
-        default=None,
-        description=(
-            "Biznes nishasi. Berilmasa, backend mcc_code orqali "
-            "mcc_categories jadvalidan topadi."
-        ),
-    )
     mcc_code: str = Field(
         ..., min_length=4, max_length=4, description="MCC kod (4 raqam)"
     )
@@ -52,49 +45,9 @@ class DemandForecastRequest(BaseModel):
         default=12,
         description="Prognoz gorizonti: 12, 24 yoki 36 oy",
     )
-    confidence_level: float = Field(
-        default=0.95,
-        ge=0.80,
-        le=0.99,
-        description="Ishonch intervali darajasi",
-    )
-    start_month: date | None = Field(
-        default=None,
-        description="Tarixiy qator boshlanish oyi (YYYY-MM-01)",
-    )
-    end_month: date | None = Field(
-        default=None,
-        description="Tarixiy qator tugash oyi (YYYY-MM-01)",
-    )
-    annual_inflation_rate_pct: float = Field(
-        default=0.12,
-        ge=-0.20,
-        le=1.00,
-        description="Yillik inflatsiya taxmini, masalan 0.12 = 12%",
-    )
-    annual_macro_growth_pct: float = Field(
-        default=0.03,
-        ge=-0.50,
-        le=0.50,
-        description="Makro talab/iqtisodiy o'sish taxmini, masalan 0.03 = 3%",
-    )
-    use_holiday_adjustments: bool = Field(
-        default=True,
-        description="Bayram va mavsumiy event flaglarini forecastga qo'shish",
-    )
-    clean_anomalies: bool = Field(
-        default=True,
-        description="Tarixiy revenue qatoridagi keskin anomal oylarni winsorize qilish",
-    )
 
     @model_validator(mode="after")
     def normalize_and_validate(self) -> "DemandForecastRequest":
-        if self.start_month:
-            self.start_month = self.start_month.replace(day=1)
-        if self.end_month:
-            self.end_month = self.end_month.replace(day=1)
-        if self.start_month and self.end_month and self.start_month > self.end_month:
-            raise ValueError("start_month end_month dan keyin bo'lishi mumkin emas")
         location_values = [
             self.lat is not None,
             self.lon is not None,
@@ -278,4 +231,84 @@ class ViabilityCheckRequest(BaseModel):
                     raise ValueError(
                         "seasonality_profile qiymatlari 0 dan katta bo'lishi kerak"
                     )
+        return self
+
+
+class ChurnPredictionRequest(BaseModel):
+    """M-E2 SMB Churn Prediction request."""
+
+    business_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Mavjud biznes IDsi. Berilsa biznes DBdan olinadi.",
+    )
+    mcc_code: str | None = Field(
+        default=None,
+        min_length=4,
+        max_length=4,
+        description="MCC kod. business_id berilmasa majburiy.",
+    )
+    niche: str | None = Field(
+        default=None,
+        description="Biznes nishasi. Berilmasa MCC yoki business orqali aniqlanadi.",
+    )
+    city: str = Field(default="Toshkent", description="Shahar nomi")
+    district: str | None = Field(default=None, description="Tuman nomi")
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
+    radius_m: float | None = Field(default=1000, ge=100, le=20_000)
+    as_of_date: date | None = Field(
+        default=None,
+        description="Scoring sanasi. Berilmasa bugungi sana ishlatiladi.",
+    )
+    prediction_horizon_months: int = Field(
+        default=24,
+        ge=6,
+        le=36,
+        description="Yopilish ehtimoli gorizonti. M-E2 uchun odatda 24 oy.",
+    )
+
+    business_age_months: int | None = Field(default=None, ge=0, le=600)
+    employee_count_est: int | None = Field(default=None, ge=0, le=500)
+    area_sqm: float | None = Field(default=None, ge=1, le=100_000)
+
+    revenue_3m_avg_uzs: Decimal | None = Field(default=None, ge=0)
+    revenue_6m_avg_uzs: Decimal | None = Field(default=None, ge=0)
+    revenue_12m_avg_uzs: Decimal | None = Field(default=None, ge=0)
+    revenue_trend_6m_pct: float | None = Field(default=None, ge=-1.0, le=2.0)
+    revenue_volatility_12m_pct: float | None = Field(default=None, ge=0, le=3.0)
+    revenue_drop_last_3m_pct: float | None = Field(default=None, ge=0, le=1.0)
+    zero_revenue_months_12m: int | None = Field(default=None, ge=0, le=12)
+
+    tx_count_3m_avg: float | None = Field(default=None, ge=0)
+    tx_count_12m_avg: float | None = Field(default=None, ge=0)
+    tx_count_trend_6m_pct: float | None = Field(default=None, ge=-1.0, le=2.0)
+    avg_ticket_3m_uzs: Decimal | None = Field(default=None, ge=0)
+    avg_ticket_change_6m_pct: float | None = Field(default=None, ge=-1.0, le=2.0)
+
+    active_days_last_90d: int | None = Field(default=None, ge=0, le=90)
+    inactive_days_last_90d: int | None = Field(default=None, ge=0, le=90)
+    online_share_12m_pct: float | None = Field(default=None, ge=0, le=1)
+
+    competitor_count_radius: int | None = Field(default=None, ge=0, le=10_000)
+    competitor_density_score: float | None = Field(default=None, ge=0, le=1)
+    nearby_closed_businesses_24m: int | None = Field(default=None, ge=0, le=10_000)
+    district_failure_rate_24m_pct: float | None = Field(default=None, ge=0, le=1)
+    macro_risk_score: float | None = Field(default=None, ge=0, le=1)
+    seasonality_risk_score: float | None = Field(default=None, ge=0, le=1)
+    data_quality_score: float | None = Field(default=None, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_churn_request(self) -> "ChurnPredictionRequest":
+        if self.business_id is None and self.mcc_code is None:
+            raise ValueError("business_id yoki mcc_code dan kamida bittasi kerak")
+        location_values = [self.lat is not None, self.lon is not None]
+        if any(location_values) and not all(location_values):
+            raise ValueError("lat va lon birga berilishi kerak")
+        if (
+            self.active_days_last_90d is not None
+            and self.inactive_days_last_90d is not None
+            and self.active_days_last_90d + self.inactive_days_last_90d > 90
+        ):
+            raise ValueError("active_days_last_90d + inactive_days_last_90d <= 90")
         return self
