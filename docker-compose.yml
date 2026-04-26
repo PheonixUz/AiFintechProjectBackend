@@ -41,18 +41,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  migrate:
-    build: .
-    command: alembic upgrade head
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/fintech_db
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-
 volumes:
   postgres_data:
   redis_data:
