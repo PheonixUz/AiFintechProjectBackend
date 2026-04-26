@@ -1,0 +1,38 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual env
+.venv/
+
+# IDE
+.idea/
+.vscode/
+
+# Env files (injected at runtime)
+.env
+.env.*
+!.env.example
+
+# Docs & local notes
+docs/
+*.md
+!README.md
+
+# Tests (not needed in production image)
+tests/
+
+# Misc
+*.log
+.DS_Store
